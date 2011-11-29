@@ -1,0 +1,6 @@
+Revision history for Bio::GeneDesign
+
+3.00    11.11.28
+        Third version added to cpan and bitbucket
+3.01	11.11.28
+	Corrected RestrictionEnzymes.pm to properly import Basic functions

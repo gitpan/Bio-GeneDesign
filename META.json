@@ -1,0 +1,69 @@
+{
+   "abstract" : "Functions for the design of synthetic genes",
+   "author" : [
+      "Sarah Richardson <notadoctor@jhu.edu>"
+   ],
+   "dynamic_config" : 1,
+   "generated_by" : "Module::Build version 0.38, CPAN::Meta::Converter version 2.112150",
+   "license" : [
+      "bsd"
+   ],
+   "meta-spec" : {
+      "url" : "http://search.cpan.org/perldoc?CPAN::Meta::Spec",
+      "version" : "2"
+   },
+   "name" : "Bio-GeneDesign",
+   "prereqs" : {
+      "build" : {
+         "requires" : {
+            "Test::More" : 0
+         }
+      },
+      "configure" : {
+         "requires" : {
+            "Module::Build" : "0.38"
+         }
+      },
+      "runtime" : {
+         "requires" : {
+            "List::Util" : 0,
+            "Perl6::Slurp" : "0.03",
+            "Text::Wrap" : "2009.0305",
+            "perl" : "5.006"
+         }
+      }
+   },
+   "provides" : {
+      "Bio::GeneDesign::Basic" : {
+         "file" : "lib/Bio/GeneDesign/Basic.pm",
+         "version" : "3"
+      },
+      "Bio::GeneDesign::Codons" : {
+         "file" : "lib/Bio/GeneDesign/Codons.pm",
+         "version" : "3"
+      },
+      "Bio::GeneDesign::HTML" : {
+         "file" : "lib/Bio/GeneDesign/HTML.pm",
+         "version" : "3"
+      },
+      "Bio::GeneDesign::Random" : {
+         "file" : "lib/Bio/GeneDesign/Random.pm",
+         "version" : "3"
+      },
+      "Bio::GeneDesign::RestrictionEnzymes" : {
+         "file" : "lib/Bio/GeneDesign/RestrictionEnzymes.pm",
+         "version" : "3.02"
+      },
+      "Bio::GeneDesign::SufTree" : {
+         "file" : "lib/Bio/GeneDesign/SufTree.pm",
+         "version" : 0
+      }
+   },
+   "release_status" : "stable",
+   "resources" : {
+      "license" : [
+         "http://opensource.org/licenses/bsd-license.php"
+      ]
+   },
+   "version" : "3.02"
+}

@@ -1,0 +1,19 @@
+Build.PL
+Changes
+lib/Bio/GeneDesign/Basic.pm
+lib/Bio/GeneDesign/Codons.pm
+lib/Bio/GeneDesign/HTML.pm
+lib/Bio/GeneDesign/Random.pm
+lib/Bio/GeneDesign/RestrictionEnzymes.pm
+lib/Bio/GeneDesign/SufTree.pm
+MANIFEST			This list of files
+README
+t/00-load.t
+t/manifest.t
+t/pod-coverage.t
+t/pod.t
+Makefile.PL
+MYMETA.yml
+MYMETA.json
+META.yml
+META.json
