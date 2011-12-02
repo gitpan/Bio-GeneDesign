@@ -10,7 +10,7 @@ use strict;
 use warnings;
 
 use vars qw($VERSION @ISA @EXPORT_OK %EXPORT_TAGS);
-$VERSION = 3.00;
+$VERSION = 3.01;
 
 @ISA = qw(Exporter);
 @EXPORT_OK = qw(
@@ -687,6 +687,7 @@ Version 3.00
 =head1 Functions
 
 =head2 make_oligos()
+
   takes a nucleotide sequence from a Chunk object and breaks it into oligos. A 
   hash reference provides all of the options, like target subchunk length, 
   oligo number, oligo length, etc. returns all oligos on one strand!!!!!!!!!!
@@ -694,12 +695,14 @@ Version 3.00
   out: hashref
 
 =head2 compare_sequences()
+
   takes two nucleotide sequences that are assumed to be perfectly aligned and 
   roughly equivalent and returns similarity metrics. should be twweeaakkeedd
   in: 2x nucleotide sequence (string)
   out: similarity metrics (hash)
 
 =head2 count()
+
   takes a nucleotide sequence and returns a base count.  Looks for total length,
   purines, pyrimidines, and degenerate bases. If degenerate bases are present 
   assumes their substitution for non degenerate bases is totally random for 
@@ -708,17 +711,20 @@ Version 3.00
   out: base count (hash)
 
 =head2 ntherm()
+
   takes a nucleotide sequence and returns entropy, enthalpy, and free energy.   
   in: nucleotide sequence (string) 
   out: (array of integers) entropy enthalpy free energy 
 
 =head2 compareseqs()
+
   takes nucleotide sequences and returns 1 if either could be said to be a
   perfect or degenerate copy of the other
   in: 2x nucleotide sequence (string)
   out: 1 OR 0
 
 =head2 regres()
+
   takes a  sequence that may be degenerate and returns a string that is prepped
   for use in a regular expression.
   in: sequence (string), 
@@ -726,12 +732,14 @@ Version 3.00
   out: regexp string (string)
 
 =head2 complement()
+
   takes a nucleotide sequence and returns its complement or reverse complement.
   in: nucleotide sequence (string), 
       switch for reverse complement (1 or null)
   out: nucleotide sequence (string)
 
 =head2 melt()
+
   takes a nucleotide sequence and returns a melting temperature.  Has four 
   different formulas: 1 simple, 2 baldwin, 3 primer3, or 4 nntherm
   in: nucleotide sequence (string), 
@@ -741,12 +749,14 @@ Version 3.00
   out: temperature (string)
 
 =head2 cleanup()
+
   takes a sequence and attempts to remove extraneous information.
   in: nucleotide sequence (string),
       switch for sequence type (0 strict nt, 1 degenerate nt, or 2 aa)
   out: nucleotide sequence  (string)
 
 =head2 oligocruncher()
+
   takes a nucleotide sequence from a Chunk object and breaks it into oligos.  
   A hash reference provides all of the options, like target subchunk length, 
   oligo number, oligo length, etc   
@@ -763,6 +773,7 @@ Version 3.00
 =head2 cons_seq()
 
 =head2 print_alignment()
+
   $swit = 1 for html, 0 for text
 
 =head2 fasta_writer()

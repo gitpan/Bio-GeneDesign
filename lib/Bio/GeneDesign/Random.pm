@@ -7,7 +7,7 @@ use strict;
 use warnings;
 
 use vars qw($VERSION @ISA @EXPORT_OK %EXPORT_TAGS);
-$VERSION = 3.00;
+$VERSION = 3.01;
 
 @ISA = qw(Exporter);
 @EXPORT_OK = qw(
@@ -65,6 +65,7 @@ Version 3.00
 =head1 Functions
 
 =head2 randDNA()
+
   takes a target length and an AT percentage and generates a random nucleotide
   sequence, with or without stops in the first frame
   in: nucleotide sequence length (scalar), 

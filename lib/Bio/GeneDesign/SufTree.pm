@@ -2,6 +2,8 @@ package Bio::GeneDesign::SufTree;
 use 5.006;
 use strict;
 
+my $VERSION = 3.01;
+
 ## Modified from code by John Kloss
 
 my %AA_KEYS =	('A'=> 0, 'C'=> 1, 'D'=> 2, 'E'=> 3, 'F'=> 4, 'G'=> 5, 'H'=> 6, 
@@ -94,6 +96,10 @@ Version 3.00
 =head2 add_aa_paths()
 
 =head2 find_aa_paths()
+
+=head1 Private Functions
+
+=head2 root()
 
 =head1 AUTHOR
 

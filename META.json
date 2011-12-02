@@ -36,11 +36,11 @@
    "provides" : {
       "Bio::GeneDesign::Basic" : {
          "file" : "lib/Bio/GeneDesign/Basic.pm",
-         "version" : "3"
+         "version" : "3.01"
       },
       "Bio::GeneDesign::Codons" : {
          "file" : "lib/Bio/GeneDesign/Codons.pm",
-         "version" : "3"
+         "version" : "3.01"
       },
       "Bio::GeneDesign::HTML" : {
          "file" : "lib/Bio/GeneDesign/HTML.pm",
@@ -48,15 +48,15 @@
       },
       "Bio::GeneDesign::Random" : {
          "file" : "lib/Bio/GeneDesign/Random.pm",
-         "version" : "3"
+         "version" : "3.01"
       },
       "Bio::GeneDesign::RestrictionEnzymes" : {
          "file" : "lib/Bio/GeneDesign/RestrictionEnzymes.pm",
-         "version" : "3.02"
+         "version" : "3.03"
       },
       "Bio::GeneDesign::SufTree" : {
          "file" : "lib/Bio/GeneDesign/SufTree.pm",
-         "version" : 0
+         "version" : "3.01"
       }
    },
    "release_status" : "stable",
@@ -65,5 +65,5 @@
          "http://opensource.org/licenses/bsd-license.php"
       ]
    },
-   "version" : "3.02"
+   "version" : "3.03"
 }

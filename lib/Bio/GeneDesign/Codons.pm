@@ -9,7 +9,7 @@ use strict;
 use warnings;
 
 use vars qw($VERSION @ISA @EXPORT_OK %EXPORT_TAGS);
-$VERSION = 3.00;
+$VERSION = 3.01;
 
 @ISA = qw(Exporter);
 @EXPORT_OK = qw(
@@ -178,11 +178,6 @@ sub amb_transcription
 #  return grep {translate($_, 1, $hashref) eq $pepseq} keys %SEED_TOTAL if ($pepseq);
 }
 
-#### combine ####
-# meant to work with the amb_trans* functions. 
-# Basically builds a list of tree nodes.
-# in: 2 x peptide lists (array reference)
-# out: combined list of peptides (vector)
 sub combine
 {
   my ($arr1ref, $arr2ref) = @_;
@@ -780,6 +775,7 @@ Version 3.00
 =head1 Functions
 
 =head2 define_aa_defaults()
+
   Generates a hash.  KEYS: one letter amino acid code (string)  
   VALUES: most highly expressed codon for that amino acid (string)
   in: reverse codon table (hash reference),
@@ -787,28 +783,33 @@ Version 3.00
   out: amino acid default table (hash)
 
 =head2 define_codon_table()
+
   Generates a hash.  KEYS: codons (string)  VALUES: amino acids (string)
   in: switch for codon table (1)
   out: codon table (hash)
 
 =head2 define_reverse_codon_table()
+
   Generates a reference to a hash. 
   KEYS: amino acids (string)  VALUES: codon list (array reference)
   in: codon table (hash reference)
   out: reverse codon table (hash)
 
 =head2 define_RSCU_values()
+
   Generates a hash.  KEYS: codons (string)  VALUES: RSCU value (float)
   in: switch for species (1 s.cer, 2 e.col, 3 h.sap, 4 c.ele, 5 d.mel)
   out: RSCU value table (hash)
 
 =head2 RSCU_filter()
+
   Deletes anything from the RSCU_TABLE that doesn't meet minimum RSCU.
   in: rscu table (hash reference),
       minimum RSCU value (integer)
   out: rscu table (hash reference)
 
 =head2 define_codon_percentages()
+
   Generates a hash.  KEYS: codons (string) 
   VALUES: RSCU value over codon family size (float)
   in: codon table (hash reference),
@@ -816,6 +817,7 @@ Version 3.00
   out: codon percentage table (hash)
 
 =head2 index_codon_percentages()
+
   Generates two arrays for x and y values of a graph of codon percentage values.
   in: dna sequence (string),
       window size (integer),
@@ -823,6 +825,7 @@ Version 3.00
   out: x values (array reference), y values (array reference)
 
 =head2 pattern_remover()
+
   takes a nucleotide sequence, a nucleotide "pattern" to be removed, and a few 
   codon tables, and returns an edited nucleotide sequence that is missing the 
   pattern (if possible).  Ranks codon replacements by RSCU differences to 
@@ -834,6 +837,7 @@ Version 3.00
   out: nucleotide sequence (string) OR null
 
 =head2 pattern_adder()
+
   takes a nucleotide sequence, a nucleotide "pattern" to be interpolated, and 
   the codon table, and returns an edited nucleotide sequence that contains the 
   pattern (if possible).
@@ -844,6 +848,7 @@ Version 3.00
   out: nucleotide sequence (string) OR null
 
 =head2 pattern_aligner()
+
   takes a nucleotide sequence, a pattern, a peptide sequence, and a codon table
   and inserts Ns before the pattern until they align properly. This is so a
   pattern can be inserted out of frame.
@@ -856,6 +861,7 @@ Version 3.00
 =head2 pattern_finder()
 
 =head2 change_codons()
+
   takes a nucleotide sequence and a few codon tables and tries to recode the
   nucleotide sequence to one of four algorithms, 0 random, 1 most optimal, 
   2 next most optimal, 3 most different, 4 least different.
@@ -868,6 +874,7 @@ Version 3.00
   out: nucleotide sequence (string)
 
 =head2 reverse_translate()
+
   takes an amino acid sequence and a specific codon table and returns that frame
   translated into amino acids.  See gdRevTrans.cgi for use.
   in: nucleotide sequence (string), 
@@ -876,6 +883,7 @@ Version 3.00
   out: amino acid sequence (string)
 
 =head2 amb_transcription()
+
   takes an ambiguous nucleotide sequence and returns a list of all possible non
   ambiguous nucleotide sequences it could represent
   in: nucleotide sequence (string),
@@ -884,6 +892,7 @@ Version 3.00
   out: nucleotide sequence list (vector)
 
 =head2 amb_translation()
+
   takes a nucleotide that may be degenerate and a codon table and returns a list
   of all amino acid sequences that nucleotide sequence could be translated into.
   in: nucleotide sequence (string),
@@ -891,6 +900,7 @@ Version 3.00
   out: amino acid sequence list (vector)
 
 =head2 degcodon_to_aas()
+
   takes a codon that may be degenerate and a codon table and returns a list of 
   all amino acids that codon could represent. If a hashref is provided with 
   previous answers, it will run MUCH faster.
@@ -899,6 +909,7 @@ Version 3.00
   out: amino acid list (vector)
 
 =head2 translate()
+
   takes a nucleotide sequence, a frame, and a codon table and returns that frame
   translated into amino acids.
   in: nucleotide sequence (string),
@@ -907,12 +918,14 @@ Version 3.00
   out: amino acid sequence (string)
 
 =head2 codon_count()
+
   takes a reference to an array of sequences and returns a hash with codons as 
   keys and the number of times the codon occurs as a value.
   in: gene sequence (array reference)
   out: codon count (hash reference)
 
 =head2 generate_RSCU_values()
+
   takes a hash reference with keys as codons and values as number of times 
   those codons occur (it helps to use codon_count) and returns a hash with each 
   codon and its RSCU value
@@ -921,8 +934,21 @@ Version 3.00
   out: RSCU values (hash reference)
 
 =head2 rscu_parser()
+
   takes the form AAA (K) 0.540
 
+=head1 PRIVATE FUNCTIONS
+
+=head2 combine
+
+  Basically builds a list of tree nodes for the amb_trans* functions. 
+  in: 2 x peptide lists (array reference) out: combined list of peptides
+  
+=head2 sitver
+
+  takes a base as a string and returns by request either a set of transitions 
+  or a set of transversions, used by change_codons()
+  
 =head1 AUTHOR
 
 Sarah Richardson <notadoctor@jhu.edu>.

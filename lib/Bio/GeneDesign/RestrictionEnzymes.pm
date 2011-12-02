@@ -9,7 +9,7 @@ use strict;
 use warnings;
 
 use vars qw($VERSION @ISA @EXPORT_OK %EXPORT_TAGS);
-$VERSION = 3.02;
+$VERSION = 3.03;
 
 @ISA = qw(Exporter);
 @EXPORT_OK = qw(
@@ -667,6 +667,7 @@ Version 3.00
 =head1 Functions
 
 =head2 define_sites()
+
   Generates a set of hash references containing information about the 
   restriction enzyme library. All have the enzyme name as a key. 
     REGEX : ref to array containing regex-ready representations of enzyme 
@@ -687,6 +688,7 @@ Version 3.00
 =head2 overhang()
 
 =head2 define_site_status()
+
   Generates a hash describing a restriction count of a nucleotide sequence.
   in: nucleotide sequence as a string
       reference to a hash containing enzyme names as keys and regular
@@ -696,6 +698,7 @@ Version 3.00
         count of their occurence in the nucleotide sequence
 
 =head2 siteseeker()
+
   Generates a hash describing the positions of a particular enzyme's recognition
   sites in a nucleotide sequence.
   in: nucleotide sequence as a string,
@@ -713,12 +716,14 @@ Version 3.00
 =head2 report_RE()
 
 =head2 build_suffix_tree()
+
   Builds two suffix trees from a list of restriction enzyme recognition sites
   in: array of enzyme names,
       reference enzyme hash
   out: array of suffix trees, one for forward orientaion, one for reverse
 
 =head2 search_suffix_tree()
+
   Working on a Bio::Seq::Feature::Store DB
 
 =head2 search_DNA()
