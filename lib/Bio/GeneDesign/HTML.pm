@@ -3,7 +3,7 @@ use Bio::GeneDesign::Basic;
 require Exporter;
 
 use vars qw($VERSION @ISA @EXPORT_OK %EXPORT_TAGS);
-$VERSION = 3.00;
+$VERSION = 3.05;
 
 @ISA = qw(Exporter);
 @EXPORT_OK = qw(
@@ -11,7 +11,7 @@ $VERSION = 3.00;
   space
   tab
 	cssbrowser
-	platform 
+	platform
 	gdheader
 	closer
 	take_exception
@@ -27,19 +27,18 @@ $VERSION = 3.00;
 	print_oligos_aligned
 	print_vector_table
 	print_RSCU_table
-	offer_fasta);
+	offer_fasta
+  $VERSION
+);
 
-%EXPORT_TAGS = (all => [qw(break space tab cssbrowser platform gdheader closer 
-  take_exception take_note hidden_fielder next_stepper next_codjug 
-  organism_selecter annpsite friendly print_enzyme_table enzyme_chooser 
-  print_oligos_aligned print_vector_table print_RSCU_table offer_fasta)]);			
-  
-my %dests = (	'SSIns'		=> "RE Site Addition", 
-				'SSRem'		=> "RE Site Subtraction", 
-				'SeqAna'	=> "Sequence Analysis", 
-				'REBB'		=> "BB Design (RE Overlap)", 
-				'UserBB'	=> "BB Design (USER Overlap)", 
-				'OlBB'		=> "BB Design (Sequence Overlap)", 
+%EXPORT_TAGS = (all => \@EXPORT_OK);			
+
+my %dests = (	'SSIns'		=> "RE Site Addition",
+				'SSRem'		=> "RE Site Subtraction",
+				'SeqAna'	=> "Sequence Analysis",
+				'REBB'		=> "BB Design (RE Overlap)",
+				'UserBB'	=> "BB Design (USER Overlap)",
+				'OlBB'		=> "BB Design (Sequence Overlap)",
 				'toCodJug'	=> "Codon Juggling");
 
 ################################################################################
@@ -265,7 +264,7 @@ $tab	<div id="critsep">
 $tab		<span id="critlabel">Ends</span>
 $tab		<span id="criteria">
 $tab			<input type="radio" name="crEndss" value="0"> All Ends<br>
-$tab			<input type="radio" name="crEndss" value="1" checked> Only 
+$tab			<input type="radio" name="crEndss" value="1" checked> Only
 $tab			<label><input type="checkbox" name="crEnds" value="5" checked="checked" />5&rsquo; overhangs</label>
 $tab			<label><input type="checkbox" name="crEnds" value="3" checked="checked" />3&rsquo; overhangs</label>
 $tab			<label><input type="checkbox" name="crEnds" value="b" />blunt ends</label>
@@ -276,7 +275,7 @@ $tab	<div id="critsep">
 $tab		<span id="critlabel">Cleavage Site Relative to Recognition Site</span>
 $tab		<span id="criteria">
 $tab			<input type="radio" name="crCutss" value="0"> All Cleavage Sites<br>
-$tab			<input type="radio" name="crCutss" value="1" checked> Only 
+$tab			<input type="radio" name="crCutss" value="1" checked> Only
 $tab			<label><input type="checkbox" name="crCuts" value="P" checked="checked" />Inside Recognition Site</label>
 $tab			<label><input type="checkbox" name="crCuts" value="A" />Outside Recognition Site</label>
 $tab		</span>
@@ -285,7 +284,7 @@ $tab	<div id="critsep">
 $tab		<span id="critlabel">Overhang Palindromy</span>
 $tab		<span id="criteria">
 $tab			<input type="radio" name="crOhangss" value="0" checked> All Overhangs<br>
-$tab			<input type="radio" name="crOhangss" value="1"> Only 
+$tab			<input type="radio" name="crOhangss" value="1"> Only
 $tab			<label><input type="checkbox" name="crOhangs" value="P" />Palindromic</label>
 $tab			<label><input type="checkbox" name="crOhangs" value="A" />Potentially Nonpalindromic</label>
 $tab			<label><input type="checkbox" name="crOhangs" value="N" />Nonpalindromic</label>
@@ -295,7 +294,7 @@ $tab	<div id="critsep">
 $tab		<span id="critlabel">Recognition Site Length</span>
 $tab		<span id="criteria">
 $tab			<input type="radio" name="crLengs" value="0" checked> All Lengths<br>
-$tab			<input type="radio" name="crLengs" value="1"> Only Lengths of 
+$tab			<input type="radio" name="crLengs" value="1"> Only Lengths of
 $tab			<label><input type="checkbox" name="crLeng" value="4" />4bp </label>
 $tab			<label><input type="checkbox" name="crLeng" value="5" />5bp </label>
 $tab			<label><input type="checkbox" name="crLeng" value="6" />6bp </label>
@@ -308,7 +307,7 @@ $tab	<div id="critsep">
 $tab		<span id="critlabel">Allow Ambiguous Bases in Recognition Site?</span>
 $tab		<span id="criteria">
 $tab			<input type="radio" name="crAmbis" value="0" checked> Allow Any Base<br>
-$tab			<input type="radio" name="crAmbis" value="1"> Allow Only 
+$tab			<input type="radio" name="crAmbis" value="1"> Allow Only
 $tab			<label><input type="checkbox" name="crAmbi" value="1" checked="checked" />Non-N bases</label>
 $tab			<label><input type="checkbox" name="crAmbi" value="2" checked="checked" />ATCG bases</label>
 $tab		</span>
@@ -317,11 +316,11 @@ $tab	<div id="critsep">
 $tab		<span id="critlabel">NEB Buffer (for enzymes available from NEB only</span>
 $tab		<span id="criteria">
 $tab			<input type="radio" name="crBuffs" value="0" checked> Any Buffer<br>
-$tab			<input type="radio" name="crBuffs" value="1"> At Least <input type="text" name="crBuffAct"  size="3" maxlength="3" value="50"/>% activity in: 
+$tab			<input type="radio" name="crBuffs" value="1"> At Least <input type="text" name="crBuffAct"  size="3" maxlength="3" value="50"/>% activity in:
 $tab			<label><input type="checkbox" name="crBuff" value="1" />1</label>
 $tab			<label><input type="checkbox" name="crBuff" value="2" />2</label>
 $tab			<label><input type="checkbox" name="crBuff" value="3" />3</label>
-$tab			<label><input type="checkbox" name="crBuff" value="4" />4</label> 
+$tab			<label><input type="checkbox" name="crBuff" value="4" />4</label>
 $tab				(<select name="crBuffBool"><option value="AND">AND</option><option value="OR">OR</option></select>)
 $tab		</span>
 $tab	</div><br><br><br>
@@ -329,7 +328,7 @@ $tab	<div id="critsep">
 $tab		<span id="critlabel">Heat Inactivation</span>
 $tab		<span id="criteria">
 $tab			<input type="radio" name="crHeats" value="0" checked> Does not Matter<br>
-$tab			<input type="radio" name="crHeats" value="1"> Inactivates at 
+$tab			<input type="radio" name="crHeats" value="1"> Inactivates at
 $tab			<label><input type="checkbox" name="crHeat" value="65" />65&deg;</label>
 $tab			<label><input type="checkbox" name="crHeat" value="80" />80&deg; </label>
 $tab		</span>
@@ -338,7 +337,7 @@ $tab	<div id="critsep">
 $tab		<span id="critlabel">Incubation Temperature</span>
 $tab		<span id="criteria">
 $tab			<input type="radio" name="crTemps" value="0" checked>  Any Temperature<br>
-$tab			<input type="radio" name="crTemps" value="1"> Allow Only 
+$tab			<input type="radio" name="crTemps" value="1"> Allow Only
 $tab			<label><input type="checkbox" name="crTemp" value="37" checked="checked" />37&deg;</label>
 $tab			<label><input type="checkbox" name="crTemp" value="45" />45&deg;</label>
 $tab			<label><input type="checkbox" name="crTemp" value="50" />50&deg;</label>
@@ -361,7 +360,7 @@ $tab		<span id="critlabel">Methylation Sensitivity</span>
 $tab		<span id="criteria">
 $tab			<input type="radio" name="crMeths" value="0" checked> Allow Any Sensitivity<br>
 $tab			<input type="radio" name="crMeths" value="1"> Allow No Sensitivity<br>
-$tab			<input type="radio" name="crMeths" value="2">Allow Only Cutters that are 
+$tab			<input type="radio" name="crMeths" value="2">Allow Only Cutters that are
 $tab				(<select name="crMethBool"><option value="AND">AND</option><option value="OR">OR</option></select>)<br>
 $tab			&nbsp;&nbsp;<label><input type="checkbox" name="crMeth" value="b.cpg" />Blocked by CpG</label>
 $tab			&nbsp;&nbsp;&nbsp;&nbsp;<label><input type="checkbox" name="crMeth" value="b.dam" />Blocked by Dam</label>
@@ -402,7 +401,7 @@ EOM
 
 sub friendly
 {
-	my $tempend = ''; my $temptemp = ''; my $tempmethi = ''; my $tempmethb = ''; 
+	my $tempend = ''; my $temptemp = ''; my $tempmethi = ''; my $tempmethb = '';
 	my ($self) = @_;
 	#ends
 		if ($self->Sticky =~ /([35b]+)/)
@@ -488,7 +487,7 @@ $tab	</div>
 EOM
 	}
 print <<EOM;
-$tab	<div id = "gridgroup1" style = "background-color: \439AB;">
+$tab	<div id = "gridgroup1" style = "background-color: #9AB;">
 $tab		<br> * This enzyme may exhibit star activity under certain conditions.
 $tab		<br>\'1 This enzyme has a 1bp overhang and may be very difficult to ligate.&nbsp;<br>&nbsp;
 $tab	</div>
@@ -530,7 +529,7 @@ $tab	</div>
 EOM
 	}
 print <<EOM;
-$tab	<div id = "gridgroup1" style = "background-color: \439AB;">
+$tab	<div id = "gridgroup1" style = "background-color: #9AB;">
 $tab		&nbsp;<br>
 $tab	</div>
 $tab</div>
@@ -544,20 +543,20 @@ sub print_oligos_aligned
 	$maskswit = 0 unless($maskswit);
 	my $oliarrref = $self->Oligos;	
 	my @oligoarr = @$oliarrref;
-	my $olapref   = $self->Olaps;    
+	my $olapref   = $self->Olaps;
 	my @olaparr = @$olapref;
-	my $colhasref = $self->Collisions; 
-	my %colhas = %$colhasref; 
+	my $colhasref = $self->Collisions;
+	my %colhas = %$colhasref;
 	my @colkeys = keys %colhas;
 	my $tab = tab($indent);
-	my $toprow; 
+	my $toprow;
 	my $botrow;
-	my $master = $self->ChunkSeq; 
+	my $master = $self->ChunkSeq;
 	my $retsam = complement($master, 0);
 	if ($self->Mask && $maskswit == 1)
 	{
-		my $mask = $self->Mask; 
-		my $tagstart = "<font color = \"\43FF0000\">"; 
+		my $mask = $self->Mask;
+		my $tagstart = "<font color = \"\43FF0000\">";
 		my $tagstop = "</font>";
 		@masterarr = split("", $master);
 		@retsamarr = split("", $retsam);
@@ -610,7 +609,7 @@ sub print_oligos_aligned
 			$k++;
 		}
 	}
-	$botrow = space(length($oligoarr[0])-length($olaparr[0])); 
+	$botrow = space(length($oligoarr[0])-length($olaparr[0]));
 	$k = 0;
 	for ($w = 1; $w < @oligoarr-0; $w+=2)
 	{
@@ -684,7 +683,7 @@ GeneDesign::HTML
 
 =head1 VERSION
 
-Version 3.00
+Version 3.05
 
 =head1 DESCRIPTION
 
@@ -704,8 +703,8 @@ Version 3.00
 
 =head2 gdheader
 
-=head2 closer 
-  
+=head2 closer
+
 =head2 take_exception
 
 =head2 take_note

@@ -26,6 +26,7 @@
       },
       "runtime" : {
          "requires" : {
+            "Bio::Root::Root" : 0,
             "List::Util" : 0,
             "Perl6::Slurp" : "0.03",
             "Text::Wrap" : "2009.0305",
@@ -36,27 +37,39 @@
    "provides" : {
       "Bio::GeneDesign::Basic" : {
          "file" : "lib/Bio/GeneDesign/Basic.pm",
-         "version" : "3.01"
+         "version" : "3.05"
+      },
+      "Bio::GeneDesign::BuildingBlock" : {
+         "file" : "lib/Bio/GeneDesign/BuildingBlock.pm",
+         "version" : "3.05"
       },
       "Bio::GeneDesign::Codons" : {
          "file" : "lib/Bio/GeneDesign/Codons.pm",
-         "version" : "3.01"
+         "version" : "3.05"
       },
       "Bio::GeneDesign::HTML" : {
          "file" : "lib/Bio/GeneDesign/HTML.pm",
-         "version" : "3"
+         "version" : "3.05"
+      },
+      "Bio::GeneDesign::Oligo" : {
+         "file" : "lib/Bio/GeneDesign/Oligo.pm",
+         "version" : "3.05"
       },
       "Bio::GeneDesign::Random" : {
          "file" : "lib/Bio/GeneDesign/Random.pm",
-         "version" : "3.01"
+         "version" : "3.05"
+      },
+      "Bio::GeneDesign::RestrictionEnzyme" : {
+         "file" : "lib/Bio/GeneDesign/RestrictionEnzyme.pm",
+         "version" : "3.05"
       },
       "Bio::GeneDesign::RestrictionEnzymes" : {
          "file" : "lib/Bio/GeneDesign/RestrictionEnzymes.pm",
-         "version" : "3.03"
+         "version" : "3.05"
       },
       "Bio::GeneDesign::SufTree" : {
          "file" : "lib/Bio/GeneDesign/SufTree.pm",
-         "version" : "3.01"
+         "version" : "3.05"
       }
    },
    "release_status" : "stable",
@@ -65,5 +78,5 @@
          "http://opensource.org/licenses/bsd-license.php"
       ]
    },
-   "version" : "3.03"
+   "version" : "3.05"
 }

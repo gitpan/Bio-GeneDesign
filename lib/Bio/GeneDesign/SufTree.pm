@@ -1,23 +1,48 @@
+#
+# GeneDesign module for sequence segmentation
+#
+
+=head1 NAME
+
+GeneDesign::SufTree - A suffix tree implementation for restriction enzyme search
+
+=head1 VERSION
+
+Version 3.05
+
+=head1 DESCRIPTION
+
+  GeneDesign uses this object to parse peptide sequences for restriction enzyme
+  recognition site possibilities
+
+=head1 AUTHOR
+
+Sarah Richardson <notadoctor@jhu.edu>.
+
+=cut
+
 package Bio::GeneDesign::SufTree;
 use 5.006;
 use strict;
 
-my $VERSION = 3.01;
+my $VERSION = 3.05;
 
 ## Modified from code by John Kloss
 
-my %AA_KEYS =	('A'=> 0, 'C'=> 1, 'D'=> 2, 'E'=> 3, 'F'=> 4, 'G'=> 5, 'H'=> 6, 
-               'I'=> 7, 'K'=> 8, 'L'=> 9, 'M'=>10, 'N'=>11, 'P'=>12, 'Q'=>13, 
+my %AA_KEYS =	('A'=> 0, 'C'=> 1, 'D'=> 2, 'E'=> 3, 'F'=> 4, 'G'=> 5, 'H'=> 6,
+               'I'=> 7, 'K'=> 8, 'L'=> 9, 'M'=>10, 'N'=>11, 'P'=>12, 'Q'=>13,
                'R'=>14, 'S'=>15, 'T'=>16, 'V'=>17, 'W'=>18, 'Y'=>19, '*'=>20	);
 
-################################################################################
-###########################                          ###########################
-################################################################################
+=head1 Functions
+
+=head2 new_aa()
+
+=cut
 
 sub new_aa
 {
 	my ($class) = @_;
-	my $self = 
+	my $self =
 	{
 		root => [ ( undef ) x 23 ]
 	};
@@ -25,12 +50,9 @@ sub new_aa
 	return $self;
 }
 
-sub root 
-{ 
-	my ($self, $root) = @_;	
-	$self->{ root} = $root if defined($root);	
-	return $self->{root};
-}
+=head2 add_aa_paths()
+
+=cut
 
 sub add_aa_paths
 {
@@ -49,6 +71,10 @@ sub add_aa_paths
   }
 }
 
+=head2 find_aa_paths()
+
+=cut
+
 sub find_aa_paths
 {
   my ($self, $protein) = @_;
@@ -61,8 +87,8 @@ sub find_aa_paths
     my $ref     = $self->{root};
     while (++$cur_idx < scalar(@seq) and $ref)
     {
-      if ($ref->[21]) 
-      {  
+      if ($ref->[21])
+      {
         push @locations, [$_, $seq_idx+1, $ref->[22]] foreach (@{$ref->[21]});
       }
       $ref_idx = $AA_KEYS{$seq[$cur_idx]};
@@ -72,38 +98,21 @@ sub find_aa_paths
   return @locations;
 }
 
-1;
-
-__END__
-
-=head1 NAME
-
-GeneDesign::SufTree - A suffix tree implementation for restriction enzyme search
-
-=head1 VERSION
-
-Version 3.00
-
-=head1 DESCRIPTION
-
-  GeneDesign uses this object to parse peptide sequences for restriction enzyme
-  recognition site possibilities
-
-=head1 Functions
-
-=head2 new_aa()
-
-=head2 add_aa_paths()
-
-=head2 find_aa_paths()
-
 =head1 Private Functions
 
 =head2 root()
 
-=head1 AUTHOR
+=cut
+sub root
+{
+	my ($self, $root) = @_;	
+	$self->{ root} = $root if defined($root);	
+	return $self->{root};
+}
 
-Sarah Richardson <notadoctor@jhu.edu>.
+1;
+
+__END__
 
 =head1 COPYRIGHT AND LICENSE
 

@@ -12,6 +12,7 @@ WriteMakefile
                    'Test::More' => 0,
                    'Perl6::Slurp' => '0.03',
                    'List::Util' => 0,
+                   'Bio::Root::Root' => undef,
                    'Text::Wrap' => '2009.0305'
                  }
 )

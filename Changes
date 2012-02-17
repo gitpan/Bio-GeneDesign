@@ -1,5 +1,12 @@
 Revision history for Bio::GeneDesign
 
+3.05	12.01.11
+	Added unit tests for many functions, slight rearrangement of locations
+	Started making objects - RestrictionEnzyme object, inherits Bio::Root::Root
+	
+3.04	11.12.28
+	Took out hard coded codon tables and added codon parsing functions in their place
+	Added configure_GeneDesign to create a hashref of GD configuration options
 
 3.03    11.12.02
 	Added POD coverage to naked private functions, cleaned some POD
