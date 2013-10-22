@@ -31,7 +31,7 @@ my $GDB = Module::Build->new
     module_name         => 'Bio::GeneDesign',
     license             => 'bsd',
     dist_author         => q{Sarah Richardson <SMRichardson@lbl.gov>},
-    dist_version        => '5.50',
+    dist_version        => '5.51',
     dist_abstract       => 'Functions for the design of synthetic genes',
     add_to_cleanup      => [ 'Bio::GeneDesign-*' ],
     create_makefile_pl  => 'traditional',
@@ -110,19 +110,19 @@ if ($llt == 0)
 {
   if (! $cpath)
   {
-    $cpath = prompt('Where should configuration files be installed?', $dcpath);
+    $cpath = $GDB->prompt('Where should configuration files be installed?', $dcpath);
   }
   if (! $spath)
   {
-    $spath = prompt('Where should scripts be installed?', $dspath);
+    $spath = $GDB->prompt('Where should scripts be installed?', $dspath);
   }
   if (! $tpath)
   {
-    $tpath = prompt('Where should GeneDesign write tmp files?', $dtpath);
+    $tpath = $GDB->prompt('Where should GeneDesign write tmp files?', $dtpath);
   }
   if (! $g && $GDB->feature('graphing'))
   {
-    $g = y_n('Enable GD::Graphics support?', $dg);
+    $g = $GDB->y_n('Enable GD::Graphics support?', $dg);
   }
 }
 else
@@ -200,48 +200,4 @@ sub process_conf_files
     $build->fix_shebang_line($result) unless $build->is_vmsish;
   }
   return;
-}
-
-sub y_n
-{
-  my ($mess, $def) = @_;
-  croak "Invalid default value: y_n() default must be 'y' or 'n'"
-    if $def && $def !~ m{^[yn]}msix;
-
-  my $answer;
-  while (1)
-  {
-    $answer = prompt($mess, $def);
-    return 'Y' if $answer =~ m{^y}msix;
-    return 'N' if $answer =~ m{^n}msix;
-    local $| = 1;
-    print "\t _ Please answer 'Y' or 'N'. _ \n";
-  }
-  return;
-}
-
-sub prompt
-{
-  my ($mess, $d) = @_;
-  croak 'prompt() called without a prompt message' unless ($mess);
-
-  # use a list to distinguish a default of undef() from no default
-  my @def = $d  ? ($d) : ();
-  # use dispdef for output
-  my @dispdef = scalar(@def) ?
-    ('[ ', (defined $def[0] ? $def[0] . q{ } : q{}), ']') :
-    (q{ }, q{});
-
-  local $| = 1;
-  print "$mess ", @dispdef, q{ };
-
-  my $ans = <STDIN>;
-  chomp $ans if defined $ans;
-    #  Ctrl-D or unattended   User hit return
-  if ( ! defined $ans || ! length $ans )
-  {
-    $ans = scalar(@def) ? $def[0] : q{};
-  }
-
-  return $ans;
 }

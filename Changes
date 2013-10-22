@@ -1,5 +1,8 @@
 Revision history for Bio::GeneDesign
 
+5.51 13.10.22
+	Used Module::Build prompt to avoid breaking automated tests
+
 5.50 13.10.21
 	Took out all segmentation (building block and oligo design) and removed to
 	a separate package.

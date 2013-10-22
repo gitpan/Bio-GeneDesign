@@ -7,7 +7,7 @@ use Pod::Usage;
 use strict;
 use warnings;
 
-my $VERSION = '5.50';
+my $VERSION = '5.51';
 my $GDV = "GD_Generate_RSCU_Table_$VERSION";
 my $GDS = ".rscu";
 
@@ -89,7 +89,7 @@ __END__
 
 =head1 VERSION
 
-  Version 5.50
+  Version 5.51
 
 =head1 DESCRIPTION
 

@@ -8,7 +8,7 @@ Bio::GeneDesign
 
 =head1 VERSION
 
-Version 5.50
+Version 5.51
 
 =head1 DESCRIPTION
 
@@ -37,7 +37,7 @@ use Carp;
 use strict;
 use warnings;
 
-my $VERSION = 5.50;
+my $VERSION = 5.51;
   
 =head1 CONSTRUCTORS
 
