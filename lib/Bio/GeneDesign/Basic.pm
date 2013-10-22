@@ -8,15 +8,15 @@ Bio::GeneDesign::Basic
 
 =head1 VERSION
 
-Version 3.05
+Version 5.50
 
 =head1 DESCRIPTION
 
-  GeneDesign is a library for the computer-assisted design of synthetic genes
+GeneDesign is a library for the computer-assisted design of synthetic genes
 
 =head1 AUTHOR
 
-Sarah Richardson <notadoctor@jhu.edu>
+Sarah Richardson <SMRichardson@lbl.gov>
 
 =cut
 
@@ -24,829 +24,418 @@ package Bio::GeneDesign::Basic;
 require Exporter;
 
 use POSIX qw(log10);
-use List::Util qw(shuffle first);
-use Class::Struct;
-use Text::Wrap qw($columns &wrap);
-use Config::Auto;
-use File::Basename;
+use Carp;
 
 use strict;
 use warnings;
 
-use vars qw($VERSION @ISA @EXPORT_OK %EXPORT_TAGS);
-$VERSION = 3.05;
+our $VERSION = 5.50;
 
-@ISA = qw(Exporter);
-@EXPORT_OK = qw(
-  configure_GeneDesign
-  regres
-  make_oligos
-  compare_sequences
-  count
-  ntherm
-  complement
-  melt
-  cleanup
-  oligocruncher
-  define_oligos
-  fasta_parser
-  cons_seq
-  print_alignment
-  fasta_writer
-  dotplot
-  gather_species
+use base qw(Exporter);
+our @EXPORT_OK = qw(
+  _sanitize
+  _count
+  _ntherm
+  _complement
+  _melt
+  _regres
+  _regarr
+  _positions
+  _is_ambiguous
+  _compare_sequences
+  _amb_transcription
+  _add_arr
   $ambnt
+  @BASES
   %NTIDES
   %AA_NAMES
   %AACIDS
-  @NTS
-  $VERSION
 );
 
-%EXPORT_TAGS =  (all => \@EXPORT_OK);
+our %EXPORT_TAGS =  (GD=> \@EXPORT_OK);
 
-struct Oligo => { map { $_ => '$' } qw(ChunkNumber OligoNumber OligoLength
-  OligoStart OligoStop OligoSense FpOlapLeng TpOlapLeng OligoSeq) };
+=head1 Definitions
 
-our %NTIDES = (A => "A", B => "[BCGKSTY]", C => "C", D => "[ADGKRTW]", G => "G",
-  H => "[ACHMTWY]", K => "[GKT]", M => "[ACM]", N => "[ABCDGHKMNRSTVWY]",
-  R => "[AGR]", S => "[CGS]", T => "T", V => "[ACGMRSV]", W => "[ATW]",
-  Y => "[CTY]", );
-our @NTS = qw(A T C G);
-our @NTSG = qw(B D H K M N R S V W Y);
+=cut
 
-our %AACIDS = map { $_, $_ } qw(A C D E F G H I K L M N P Q R S T V W Y);
+our @BASES = qw(A T C G);
+
+our %NTIDES = (
+  A => [qw(A)],     T => [qw(T)],     C => [qw(C)],     G => [qw(G)],
+  R => [qw(A G)],   Y => [qw(C T)],   W => [qw(A T)],   S => [qw(C G)],
+  K => [qw(G T)],   M => [qw(A C)],   B => [qw(C G T)], D => [qw(A G T)],
+  H => [qw(A C T)], V => [qw(A C G)], N => [qw(A C G T)]
+);
+
+my %REGHSH = (
+  A => "A",         T => "T",
+  C => "C",         G => "G",
+  R => "[AGR]",     Y => "[CTY]",
+  W => "[ATW]",     S => "[CGS]",
+  K => "[GKT]",     M => "[ACM]",
+  B => "[BCGKSTY]", D => "[ADGKRTW]",
+  H => "[ACHMTWY]", V => "[ACGMRSV]",
+  N => "[ABCDGHKMNRSTVWY]"
+);
+
+our $ambnt    = qr/[R Y W S K M B D H V N]+/x;
+
+our %AACIDS = map { $_ => $_ } qw(A C D E F G H I K L M N P Q R S T V W Y);
 $AACIDS{"*"} = "[\*]";
-our %AA_NAMES = (A => "Ala", B => "Unk", C => "Cys", D => "Asp", E => "Glu",
-  F => "Phe", G => "Gly", H => "His", I => "Ile", J => "Unk", K => "Lys",
-  L => "Leu", M => "Met", N => "Asn", O => "Unk", P => "Pro", Q => "Gln",
-  R => "Arg", S => "Ser", T => "Thr", U => "Unk", V => "Val", W => "Trp",
-  X => "Unk", Y => "Tyr", Z => "Unk","*" => "Stp");
+
+our %AA_NAMES = (
+  A => "Ala", B => "Unk", C => "Cys", D => "Asp", E => "Glu", F => "Phe",
+  G => "Gly", H => "His", I => "Ile", J => "Unk", K => "Lys", L => "Leu",
+  M => "Met", N => "Asn", O => "Unk", P => "Pro", Q => "Gln", R => "Arg",
+  S => "Ser", T => "Thr", U => "Unk", V => "Val", W => "Trp", X => "Unk",
+  Y => "Tyr", Z => "Unk","*" => "Stp");
 
 # entropy, enthalpy, and free energy of paired bases
-my %TEEFE = ("TC" => ([ 8.8, 23.5, 1.5]), "GA" => ([ 8.8, 23.5, 1.5]),
+my %EEG = (
+  "TC" => ([ 8.8, 23.5, 1.5]), "GA" => ([ 8.8, 23.5, 1.5]),
   "CT" => ([ 6.6, 16.4, 1.5]), "AG" => ([ 6.6, 16.4, 1.5]),
   "GG" => ([10.9, 28.4, 2.1]), "CC" => ([10.9, 28.4, 2.1]),
   "AA" => ([ 8.0, 21.9, 1.2]), "TT" => ([ 8.0, 21.9, 1.2]),
   "AT" => ([ 5.6, 15.2, 0.9]), "TA" => ([ 6.6, 18.4, 0.9]),
   "CG" => ([11.8, 29.0, 2.8]), "GC" => ([10.5, 26.4, 2.3]),
   "CA" => ([ 8.2, 21.0, 1.7]), "TG" => ([ 8.2, 21.0, 1.7]),
-  "GT" => ([ 9.4, 25.5, 1.5]), "AC" => ([ 9.4, 25.5, 1.5]));
-
-my $nonawords  = qr/[^\w*]*/;
-my $nonwords  = qr/\W*/;
-my $fastaline  = qr/\A>[\S\ ]*[\n\r]{1}/;
-my $nonaa    = qr/[BJOUX]{1}/;
-our $ambnt    = qr/[RYWSKMBDHVN]+/;
+  "GT" => ([ 9.4, 25.5, 1.5]), "AC" => ([ 9.4, 25.5, 1.5])
+);
 
 =head1 Functions
 
-=head2 configure_GeneDesign
+=head2 _sanitize()
 
-  takes a path to the directory containing GeneDesign.conf
-  in: path
-  out: hashref of GD configuration info
+remove non nucleotide characters from nucleotide sequences. remove non amino
+acid characters from peptide sequences. return sanitized strand and list of bad
+characters.
 
 =cut
 
-sub configure_GeneDesign
+sub _sanitize
 {
-	my ($conf_dir) = @_;
-	my $GD = Config::Auto::parse("GeneDesign.conf", ("path"=>$conf_dir));
-  opendir (my $CODDIR, $GD->{codon_dir});
-  my @tables = readdir($CODDIR);
-  closedir($CODDIR);
-  $GD->{ORGANISMS} = {};
-	$GD->{CODONTABLES} = {};
-  foreach my $table (@tables)
+  my ($strand, $swit) = @_;
+  $swit = $swit || 'nuc';
+  die ('bad sanitize switch') if ($swit ne 'nuc' && $swit ne 'pep');
+  my %noncount = ();
+  my $newstrand = q{};
+  my @arr = split q{}, $strand;
+  foreach my $char (@arr)
   {
-    my $name = basename($table);
-    $name =~ s{\.[^.]+$}{};
-    if ($table =~ /\.rscu\Z/)
+    my $CH = uc $char;
+    if ($swit eq 'nuc' && exists $NTIDES{$CH}
+    || ($swit eq 'pep' && exists $AACIDS{$CH}))
     {
-      $GD->{ORGANISMS}->{$name} = $GD->{codon_dir} . "/" . $table;
+      $newstrand .= $char;
     }
-    elsif ($table =~ /\.ct\Z/)
+    else
     {
-      $GD->{CODONTABLES}->{$name} = $GD->{codon_dir} . "/" . $table;
+      $noncount{$char}++;
     }
   }
-  $GD->{VERSION} = $VERSION;
-  return $GD;
+  my @baddies = keys %noncount;
+  return ($newstrand, @baddies);
 }
 
-=head2 gather_species
+=head2 _count()
 
-  #NO UNIT TESTS
+takes a nucleotide sequence and returns a base count.  Looks for total length,
+purines, pyrimidines, and degenerate bases. If degenerate bases are present
+assumes their substitution for non degenerate bases is totally random for
+percentage estimation.
 
-=cut
-
-sub gather_species
-{
-  my ($GD) = @_;
-  my $path = $$GD{codon_dir};
-}
-
-=head2 count()
-
-  takes a nucleotide sequence and returns a base count.  Looks for total length,
-  purines, pyrimidines, and degenerate bases. If degenerate bases are present
-  assumes their substitution for non degenerate bases is totally random for
-  percentage estimation.
   in: nucleotide sequence (string),
   out: base count (hash)
 
 =cut
 
-sub count
+sub _count
 {
   my ($strand) = @_;
-  return if (!$strand);
-  my $BC = {};
-  $$BC{'length'} = length($strand);
-  foreach (@NTS, @NTSG)  {  $$BC{$_}   = ($strand =~ s/$_//ig || 0);  };
-  foreach (@NTS)      {  $$BC{'d'} += $$BC{$_};      };
-  foreach (@NTSG)      {  $$BC{'n'} += $$BC{$_};      };
-  $$BC{'?'} = ($$BC{'d'} + $$BC{'n'}) - $$BC{'length'};
-  $$BC{'U'} = ($strand =~ s/U//ig || 0);
-  my $split = .5*$$BC{'R'}    + .5*$$BC{'Y'}    + .5*$$BC{'K'}    + .5*$$BC{'M'}    + .5*$$BC{'N'};
-  my $trip  = (2/3)*$$BC{'B'} + (2/3)*$$BC{'V'} + (1/3)*$$BC{'D'} + (1/3)*$$BC{'H'};
-  if ($trip || $split)
-  {
-    $$BC{'GCp'} = int(((($$BC{'S'}+$$BC{'G'}+$$BC{'C'}+$split + $trip)/$$BC{'length'})*100)+.5);
-    $$BC{'ATp'} = int(((($$BC{'W'}+$$BC{'A'}+$$BC{'T'}+$split + (.9-$trip))/$$BC{'length'})*100)+.5);
-  }
-  elsif (! $trip && ! $split)
-  {
-    $$BC{'GCp'} = int(((($$BC{'S'}+$$BC{'G'}+$$BC{'C'})/$$BC{'length'})*100)+.5);
-    $$BC{'ATp'} = int(((($$BC{'W'}+$$BC{'A'}+$$BC{'T'})/$$BC{'length'})*100)+.5);
-  }
-  return $BC;
+  my $len = length $strand;
+  my @arr = split q{}, uc $strand;
+  my %C = map {$_ => 0} keys %NTIDES;
+  
+  #Count bases
+  $C{$_}++ foreach @arr;
+  
+  $C{d} += $C{$_} foreach (qw(A T C G));
+  $C{n} += $C{$_} foreach (qw(B D H K M N R S V W Y));
+  $C{'?'} = ($C{d} + $C{n}) - $len;
+  
+  #Estimate how many of each degenerate base would be a G or C
+  my $split = .5*$C{R}  + .5*$C{Y}  + .5*$C{K}  + .5*$C{M}  + .5*$C{N};
+  my $trip  = (2*$C{B} / 3) + (2*$C{V} / 3) + ($C{D} / 3) + ($C{H} / 3);
+  
+  #Calculate GC/AT percentage
+  my $gcc = $C{S} + $C{G} + $C{C} + $split + $trip;
+  my $gcp = sprintf "%.1f", ($gcc / $len) * 100;
+  $C{GCp} = $gcp;
+  $C{ATp} = 100 - $gcp;
+  $C{len} = $len;
+  
+  return \%C;
 }
 
-=head2 melt()
+=head2 _melt()
 
-  takes a nucleotide sequence and returns a melting temperature.  Has four
-  different formulas: 1 simple, 2 baldwin, 3 primer3, or 4 nntherm
-  in: nucleotide sequence (string),
-      formula number,
+takes a nucleotide sequence and returns a melting temperature
+
+  in: nucleotide sequence (string)
       salt concentration (string, opt, def =.05),
       oligo concentration (string, opt, def = .0000001)
-  out: temperature (string)
+  out: temperature (float)
 
 =cut
 
-sub melt
+sub _melt
 {
-  my ($strand, $swit, $salt, $conc) = @_;
-  return if (!$strand);
-  $swit = $swit || 3;
+  my ($strand, $salt, $conc) = @_;
+  my $C = _count($strand);
+  my $len = length($strand);
   $salt = $salt || .05;
   $conc = $conc || .0000001;
-  my $mgc = 1.987;
-  my $BC = count($strand);
-  if ($swit == 1) #simple
+  my $Naj = 16.6 * log10($salt);
+
+  my $Tm;
+
+  if ($len < 14)
   {
-    return ((4 * ($$BC{'C'} + $$BC{'G'})) + (2 * ($$BC{'A'} + $$BC{'T'})));
+    $Tm = ((4 * ($C->{C} + $C->{G})) + (2 * ($C->{A} + $C->{T})));
   }
-  if ($swit == 2 || $swit == 3) #baldwin, primer3
+  elsif ($len >= 14 && $len <= 50)
   {
-    my $base = 81.5 + 16.6*log10($salt) + 41*(($$BC{'C'}+$$BC{'G'})/length($strand));
-    return $base - (675/length($strand)) if ($swit == 2);
-    return $base - (600/length($strand)) if ($swit == 3);
+    $Tm = 100.5 + (41 * ($C->{G} + $C->{C}) / $len) - (820/$len) + $Naj;
   }
-  if ($swit == 4) ##nntherm
+  elsif ($len > 50)
   {
-    my ($dH, $dS, $dG) = ntherm($strand);
-    return  ((($dH-3.4) / (($dS+($mgc*abs(log($conc / 2))))/1000))-273.15) + (16.6*log10($salt));
+    $Tm = 81.5 + (41 * ($C->{G} + $C->{C}) / $len) - (500/$len) + $Naj - .62;
   }
-  return undef;
+  return sprintf "%.1f", $Tm;
 }
 
-=head2 ntherm()
+=head2 _ntherm()
 
-  takes a nucleotide sequence and returns entropy, enthalpy, and free energy.
+takes a nucleotide sequence and returns a nearest neighbor melting temp.
+
   in: nucleotide sequence (string)
-  out: (array of integers) entropy enthalpy free energy
-  #NO UNIT TESTS
+  out: temperature (float)
   
 =cut
 
-sub ntherm
+sub _ntherm
 {
-  my ($strand) = @_;
+  my ($strand, $salt, $conc) = @_;
   my ($dH, $dS, $dG) = (0, 0, 0);
-  foreach my $w (keys %TEEFE)
+  foreach my $w (keys %EEG)
   {
-    while ($strand =~ /(?=$w)/ig)
+    while ($strand =~ /(?=$w)/ixg)
     {
-      $dH += $TEEFE{$w}->[0];
-      $dS += $TEEFE{$w}->[1];
-      $dG += $TEEFE{$w}->[2];
+      $dH += $EEG{$w}->[0];
+      $dS += $EEG{$w}->[1];
+      #$dG += $EEG{$w}->[2];
     }
   }
-  return ($dH, $dS, $dG);
+  $salt = $salt || .05;
+  $conc = $conc || .0000001;
+  my $Naj = 16.6 * log10($salt);
+  my $lc = 1.987 * abs( log( $conc / 2 ) );
+  my $Tm =  ( ( ($dH - 3.4) / ( ($dS + $lc) / 1000) ) - 273.15) + $Naj;
+  return sprintf "%.1f", $Tm;
 }
 
-=head2 complement()
+=head2 _complement()
 
-  takes a nucleotide sequence and returns its complement or reverse complement.
+takes a nucleotide sequence and returns its complement or reverse complement.
+
   in: nucleotide sequence (string),
       switch for reverse complement (1 or null)
   out: nucleotide sequence (string)
 
 =cut
 
-sub complement
+sub _complement
 {
   my ($strand, $swit) = @_;
-  return undef if (!$strand);
   $strand = scalar reverse($strand) if ($swit);
-  $strand =~ tr/ACGTRYKMBDHV/TGCAYRMKVHDB/;
+  $strand =~ tr/AaCcGgTtRrYyKkMmBbDdHhVv/TtGgCcAaYyRrMmKkVvHhDdBb/;
   return $strand;
 }
 
-=head2 regres()
+=head2 _regres()
 
-  takes a  sequence that may be degenerate and returns a string that is prepped
-  for use in a regular expression.
+takes a  sequence that may be degenerate and returns a string that is prepped
+for use in a regular expression.
+  
   in: sequence (string),
       switch for aa or nt sequence (1 or null)
   out: regexp string (string)
 
 =cut
 
-sub regres
+sub _regres
 {
   my ($sequence, $swit) = @_;
-  return if (!$sequence);
-  $swit = 1 if (!$swit);
-  my $comp = "";
-  foreach my $char (split('', $sequence))
+  $swit = $swit || 1;
+  my $comp = q{};
+  my @arr = split('', uc $sequence);
+  foreach my $char (@arr)
   {
     if ($swit == 1)
     {
-      $comp .= exists $NTIDES{$char}  ?  $NTIDES{$char}  :  "[X]";
+      my $ntide = $REGHSH{$char};
+      croak ("$char is not a nucleotide\n") unless $ntide;
+      $comp .= $ntide;
     }
     elsif ($swit == 2)
     {
-      $comp .= exists $AACIDS{$char}  ?  $AACIDS{$char}  :  "[X]";
+      my $aa = $AACIDS{$char};
+      croak ("$char is not an amino acid \n") unless $aa;
+      $comp .= $aa;
     }
   }
-  return $comp;
+  return qr/$comp/x;
 }
 
-=head2 cleanup()
-
-  takes a sequence and attempts to remove extraneous information.
-  in: nucleotide sequence (string),
-      switch for sequence type (0 strict nt, 1 degenerate nt, or 2 aa)
-  out: nucleotide sequence  (string)
+=head2 regarr()
 
 =cut
 
-sub cleanup
+sub _regarr
 {
-  my ($sequence, $swit) = @_;
-  $swit = 0 if (!$swit);
-  $sequence =~ s/$fastaline//;            #remove FASTA info line
-  $sequence = uc $sequence;              #capitalize everything
-  $sequence =~ s/$nonawords//g  if ($swit == 2);  #remove every nonword except *
-  $sequence =~ s/$nonwords//g    if ($swit != 2);  #remove every nonword
-  if ($swit < 2)  {  $sequence =~ s/$_//g foreach ( qw(E F I J L O P Q U X Z) );  }  #strict nucleotide editing
-  if ($swit == 0)  {  $sequence =~ s/$_//g foreach (  @NTSG           );  }  #degenerate nucleotide editing
-  if ($swit == 2)  {  $sequence =~ s/$_//g foreach ( qw(B J O U X Z)       );  }  #amino acid editing
-  return $sequence;
+  my ($sequence) = @_;
+  my $regex = [_regres($sequence, 1)];
+  my $comp = _complement($sequence, 1);
+  if ($comp ne $sequence)
+  {
+    push @$regex, _regres($comp, 1);
+  }
+  return $regex;
 }
 
-=head2 compare_sequences()
+=head2 _positions()
 
-  takes two nucleotide sequences that are assumed to be perfectly aligned and
-  roughly equivalent and returns similarity metrics. should be twweeaakkeedd
+=cut
+
+sub _positions
+{
+  my ($seq, $regarr) = @_;
+  my $temphash = {};
+  foreach my $sit (@$regarr)
+  {
+    while ($seq =~ /(?=($sit))/ixg)
+    {
+      $temphash->{pos $seq} = $1;
+    }
+  }
+  return $temphash;
+}
+
+=head2 _is_ambiguous
+
+=cut
+
+sub _is_ambiguous
+{
+  my ($sequence) = @_;
+  return 1 if ($sequence =~ $ambnt);
+  return 0;
+}
+
+=head2 _compare_sequences()
+
+takes two nucleotide sequences that are assumed to be perfectly aligned and
+roughly equivalent and returns similarity metrics. should be twweeaakkeedd
+  
   in: 2x nucleotide sequence (string)
   out: similarity metrics (hash)
 
 =cut
 
-sub compare_sequences
+sub _compare_sequences
 {
   my ($topseq, $botseq) = @_;
   return if (!$botseq || length($botseq) != length($topseq));
   my ($tsit, $tver, $len) = (0, 0, length($topseq));
-  my $alresults;
   while (length($topseq) > 0)
   {
     my ($topbit, $botbit) = (chop($topseq), chop ($botseq));
     if ($topbit ne $botbit)
     {
-      $topbit = $topbit =~ $NTIDES{R}  ?  1  :  0;
-      $botbit = $botbit =~ $NTIDES{R}  ?  1  :  0;
+      $topbit = $topbit =~ $REGHSH{R}  ?  1  :  0;
+      $botbit = $botbit =~ $REGHSH{R}  ?  1  :  0;
       $tsit++ if ($topbit == $botbit);
       $tver++ if ($topbit != $botbit);
     }
   }
-  $$alresults{'D'} = $tsit + $tver;                    #changes
-  $$alresults{'I'} = $len - $$alresults{'D'};                #identities
-  $$alresults{'T'} = $tsit;                        #transitions
-  $$alresults{'V'} = $tver;                        #transversions
-  $$alresults{'P'} = int((100 - (($$alresults{'D'} / $len) * 100)) + .5);  #percent identity
-  return $alresults;
+  my %A;
+  $A{D} = $tsit + $tver;               #changes
+  $A{I} = $len - $A{D};                #identities
+  $A{T} = $tsit;                       #transitions
+  $A{V} = $tver;                       #transversions
+  $A{P} = sprintf "%.1f", 100 - (($A{D} / $len) * 100);  #percent identity
+  return \%A;
 }
 
-=head2 cons_seq()
-  
-  #NO UNIT TESTS
+=head2 _amb_transcription
 
 =cut
 
-sub cons_seq
+sub _amb_transcription
 {
-  my ($arrref) = @_;
-  my $cons = '';
-  for my $x (0..length($$arrref[0]))
+  my ($ntseq) = @_;
+  my $prseq = uc $ntseq;
+  my (@SEED, @NEW) = ((), ());
+  my $offset = 0;
+  my $ntlen = length($prseq);
+  while ($offset < $ntlen)
   {
-    my $flag = 0;
-    my $init = substr($$arrref[0], $x, 1);
-    for my $y (1..scalar(@$arrref)-1)
+    my $template = substr($prseq, $offset, 1);
+    my $ntides = $NTIDES{$template};
+    my $possibilities = scalar(@$ntides);
+    if ($possibilities == 1)
     {
-      $flag++ if ($init ne substr($$arrref[$y], $x, 1));
+      @SEED = ( $template ) if ($offset == 0);
+      @NEW  = ( $template ) if ($offset >  0);
     }
-    $cons .=  $flag == 0  ?  substr($$arrref[0], $x, 1)  :  '_';
+    else
+    {
+      @SEED = @$ntides if ($offset == 0);
+      @NEW  = @$ntides if ($offset >  0);
+    }
+    unless ($offset == 0)
+    {
+      @SEED = _add_arr(\@SEED, \@NEW);
+    }
+    $offset ++;
   }
-  return $cons;
+  my %hsh = map {$_ => 1 } @SEED;
+  my @keys = sort keys %hsh;
+  return \@keys;
 }
 
-=head2 fasta_parser()
 
-  #NO UNIT TESTS
+=head2 _add_arr
 
-=cut
-
-sub fasta_parser
-{
-  my ($instr, $swit) = @_;
-  $swit = 0 if (!$swit);
-  my $seqhsh = {};
-  my @pre = split(">", $instr);
-  shift @pre;
-  foreach my $preseq (@pre)
-  {
-    my @pair = split(/[\n\r]/, $preseq);
-    my $id = shift @pair;
-    if ($swit)
-    {
-      my @preid = split(/\s/, $id);
-      $id = $preid[0];
-    }
-    $$seqhsh{">" . $id} = uc join("", @pair);
-  }
-  return $seqhsh;
-}
-
-=head2 fasta_writer()
-
-  #NO UNIT TESTS
-
-=cut
-
-sub fasta_writer
-{
-  my ($seqhsh) = @_;
-  my $outstr = '';
-  $columns = 81;
-  foreach my $id (sort {$a cmp $b} keys %$seqhsh)
-  {
-    $outstr .= $id . "\n";
-    $outstr .= wrap("","", $$seqhsh{$id}). "\n";
-  }
-  return $outstr;
-}
-
-=head2 print_alignment()
-
-  $swit = 1 for html, 0 for text
-  #NO UNIT TESTS
-
-=cut
-
-sub print_alignment
-{
-  my ($nuchshref, $width, $swit, $aaseq) = @_;
-  my ($space, $break, $times) = $swit == 0  ?  (" ", "\n", "x")  :  ("&nbsp;", "<br>", "&times;");
-  my $start = 0;
-  my $output = $break;
-  while ($start < length($$nuchshref{first {1} keys %$nuchshref}))
-  {
-    my $count = 0;
-    my $iter = 1;
-    if ($aaseq)
-    {
-      my $rt;
-      $output.= $break . "0 tran" . $space;
-      for ($rt = ($start / 3); $rt < ($start / 3) + ($width / 3); $rt++)
-      {
-        $output .= substr($aaseq, $rt, 1) . $space x 2 if ($rt < length($aaseq));
-        $output .= $space x 3 if ($rt >= length($aaseq));
-      }
-      $output .= $space . $rt;
-    }
-    foreach (sort keys %$nuchshref)
-    {
-      $output .= $break . $_ . $space . substr($$nuchshref{$_}, $start, $width);
-      $output .= $space . ($start+$width)*$iter if ($count == 0 && ($start+$width)*$iter < length($$nuchshref{$_}));
-      $output .= ($space x (($start+$width)*$iter - length($$nuchshref{$_})+1)) . ($start+$width)*$iter if ($count == 0 && ($start+$width)*$iter >= length($$nuchshref{$_}));
-      $count++;
-    }
-    $iter++;
-    $output .= $break . $space x 5 . (($space x 9 . $times) x ($width / 10));
-    $output .= $break x 2;
-    $start += $width;
-  }
-  return $output;
-}
-
-=head2 oligocruncher()
-
-  takes a nucleotide sequence from a Chunk object and breaks it into oligos.
-  A hash reference provides all of the options, like target subchunk length,
-  oligo number, oligo length, etc
-  in: Chunk (struct)
-      Options (hash reference)
-  out: nothing (modifies Chunk (struct))
-
-  #NO UNIT TESTS
-
-=cut
-
-sub oligocruncher
-{
-  my ($tov, $hashref) = @_;
-  my ($tar_chn_len, $tar_cur_dif, $cur_oli_num, $cur_oli_lap, $cur_oli_len, $cur_chn_mel, $cur_oli_gap, $avg_chn_mel, $avg_oli_len, $start, $starte, $starto, $avg) = 0;
-  my (@Overlaps, @tree, @begs, @ends, @Oligos);
-  my %pa = %$hashref;
-  my %Collisions;
-  $tar_chn_len = $pa{per_chn_len};
-  $cur_oli_num = $pa{tar_oli_num};
-  $cur_oli_len = $pa{tar_oli_len};
-  $cur_oli_gap = $pa{tar_oli_gap};
-  $cur_oli_lap = $pa{tar_oli_lap};
-  $tar_cur_dif = $tov->ChunkLength - $tar_chn_len;
-#print "\n<br><br>\nrev 0 ", $tov->ChunkNumber, ", $tar_chn_len bp, dif $tar_cur_dif, num $cur_oli_num, len $cur_oli_len, lap $cur_oli_lap, mel $pa{tar_chn_mel}<br>";
-  if (abs($tar_cur_dif) >= ($pa{tar_oli_len}+$pa{tar_oli_gap}))  ##-if difference btw perfect and current is bigger than another pair of oligos, increment oli_num
-  {
-    $cur_oli_num = $pa{tar_oli_num} + (2 * int(($tar_cur_dif / ($pa{tar_oli_len} + $pa{tar_oli_gap})) + .5 ));
-    $tar_chn_len = ($cur_oli_num * ($pa{tar_oli_gap} + $pa{tar_oli_lap})) + $pa{tar_oli_lap};
-    $tar_cur_dif = $tov->ChunkLength - $tar_chn_len;
-  }
-  $tov->ShrtOligo(2*$pa{max_oli_len});  $tov->LongOligo(0);
-#print "rev 1 ", $tov->ChunkNumber, ", per $tar_chn_len, dif $tar_cur_dif, num $cur_oli_num, len $cur_oli_len, lap $cur_oli_lap, mel $pa{tar_chn_mel}, tol $pa{chn_mel_tol}, <br>";
-  if ($pa{gapswit} == 1)
-  {
-    ##-if difference can be spread equally across oligos, increase length
-    if (abs($tar_cur_dif) >= $cur_oli_num)
-    {
-      $cur_oli_len = $pa{tar_oli_len} + int($tar_cur_dif / $cur_oli_num);
-      $tar_cur_dif = $tar_cur_dif - ($cur_oli_num * (int($tar_cur_dif / $cur_oli_num)));
-    }
-    ##-if the length is violating max_len, increase num by 2, decrease len by 10, recalc
-    if ( ($cur_oli_len >= $pa{max_oli_len}) || ($cur_oli_len == $pa{max_oli_len} && $tar_cur_dif > 0) )
-    {
-      $cur_oli_len = $pa{tar_oli_len}-10;
-      $cur_oli_num += 2;
-      $tar_chn_len = $cur_oli_num*($cur_oli_len - $pa{tar_oli_lap}) + $pa{tar_oli_lap};
-      $tar_cur_dif = $tov->ChunkLength - $tar_chn_len;
-      if (abs($tar_cur_dif) >= $cur_oli_num)
-      {
-        $cur_oli_len = $cur_oli_len + int($tar_cur_dif / $cur_oli_num);
-        $tar_cur_dif = $tar_cur_dif - ($cur_oli_num * (int($tar_cur_dif / $cur_oli_num)));
-      }
-    }
-    if ($cur_oli_len >= $pa{max_oli_len} && $tar_cur_dif > 0)
-    {
-      print "oh no, after rev1, current target is >= the max! $pa{max_oli_len} --- please tell Sarah the following string.<br> ";
-      print "&nbsp;&nbsp;cur_oli_len $cur_oli_len, cur_oli_num $cur_oli_num, tar_cur_dif $tar_cur_dif, tar_chn_len $tar_chn_len, chunk length ", $tov->ChunkLength, "<br><br>";
-    }
-    my $start = 0;
-    for (my $w = 1; $w <= $cur_oli_num; $w++)          ##-difference now be between 0 and abs(oli_num-1) - so in/decrement individual overlap lengths
-    {
-      my $strlen = $cur_oli_len;
-      $strlen++ if ( $w <= abs($tar_cur_dif) && $tar_cur_dif > 0);
-      $strlen-- if ( $w <= abs($tar_cur_dif) && $tar_cur_dif < 0);
-      push @Overlaps, substr($tov->ChunkSeq, $start + $strlen - $cur_oli_lap, $cur_oli_lap) if ($w != $cur_oli_num);
-      $start =  $start + $strlen - $cur_oli_lap;
-    }
-    @tree = map (melt($_, $pa{melform} , .05, .0000001), @Overlaps);
-    foreach (@tree)  {  $avg += $_;  }  $avg = int(($avg / scalar(@tree))+.5);
-    $cur_chn_mel = ($avg < ($pa{tar_chn_mel}-10))  ?  $pa{tar_chn_mel} - .2*($pa{tar_chn_mel}-$avg) :  $pa{tar_chn_mel};  #Adjust target melting temp for reality.
-#print "rev 3 ", $tov->ChunkNumber, ", per $tar_chn_len, dif $tar_cur_dif, num $cur_oli_num, len $cur_oli_len, lap $cur_oli_lap, mel $cur_chn_mel, tol $pa{chn_mel_tol}, <br>";
-
-    $start = 0;
-    @Overlaps = ();
-    for (my $w = 1; $w <= $cur_oli_num; $w++)          ##-then make oligos, changing overlaps for melting temperature if appropriate
-    {
-      my $laplen = $cur_oli_lap;
-      my $strlen = $cur_oli_len;
-      $strlen++ if ( $w <= abs($tar_cur_dif) && $tar_cur_dif > 0);
-      $strlen-- if ( $w <= abs($tar_cur_dif) && $tar_cur_dif < 0);
-      $laplen-- if ($strlen < $pa{tar_oli_len} && $cur_oli_len < $pa{tar_oli_len});#
-      if ($w != $cur_oli_num)
-      {
-        unless ($pa{hardlap})
-        {
-  #    print ".rev3. ", $tov->ChunkNumber, ", $w strlen $strlen, laplen $laplen, num $cur_oli_num, len $cur_oli_len, mel $cur_chn_mel, tol $pa{chn_mel_tol}, max $pa{max_oli_len}, <br>";
-          while (melt(substr($tov->ChunkSeq, $start + $strlen - $laplen, $laplen), $pa{melform}, .05, .0000001) >= ($cur_chn_mel + $pa{chn_mel_tol}) && $strlen > $cur_oli_len)
-          {
-  #      print "...deccing<br>";
-            $laplen--;  $strlen--;
-          }
-          while (melt(substr($tov->ChunkSeq, $start + $strlen - $laplen, $laplen), $pa{melform}, .05, .0000001) <= ($cur_chn_mel - $pa{chn_mel_tol}) && $strlen < $pa{max_oli_len})
-          {
-  #      print "...inccing<br>";
-            $laplen++;  $strlen++;
-          }
-        }
-        push @Overlaps, substr($tov->ChunkSeq, $start + $strlen - $laplen, $laplen);
-#      print "&nbsp;&nbsp;$Overlaps[-1]<Br>";
-        $avg_chn_mel += melt(substr($tov->ChunkSeq, $start + $strlen - $laplen, $laplen), $pa{melform}, .05, .0000001);
-      }
-      push @Oligos, substr($tov->ChunkSeq, $start, $strlen);
-      push @begs, $start;
-      push @ends, $start + length($Oligos[-1]);
-      $tov->ShrtOligo(length($Oligos[-1])) if length($Oligos[-1]) <= $tov->ShrtOligo;
-      $tov->LongOligo(length($Oligos[-1])) if length($Oligos[-1]) >= $tov->LongOligo;
-      $avg_oli_len += length($Oligos[-1]);
-      $start =  $start + $strlen - $laplen;
-    }
-    for (my $w = 0; $w <= $cur_oli_num - 3; $w++)  {  $Collisions{$w} = $ends[$w] - $begs[$w+2]  if ($ends[$w] > $begs[$w+2]);  }
-  }
-  elsif ($pa{gapswit} == 0)
-  {
-    $cur_oli_len = int((2* $tov->ChunkLength) / ((2*$tar_chn_len) / $pa{tar_oli_len}));
-    $cur_oli_lap = int($cur_oli_len * .5);
-    $tar_cur_dif = $tov->ChunkLength - ($cur_oli_num * $cur_oli_len * .5 + $cur_oli_lap);
-
-    $starto = $cur_oli_lap + 1;
-    for (my $w = 1; $w <= $cur_oli_num; $w++)          ##-difference should now be between 0 and abs(oli_num-1) - so in/decrement individual overlap lengths
-    {
-      my $strlen = $cur_oli_len;
-      if ( $w <= abs(2 * $tar_cur_dif) && $tar_cur_dif > 0)  {$strlen++;}
-      if ( $w <= abs(2 * $tar_cur_dif) && $tar_cur_dif < 0)  {$strlen--;}
-      if ($w % 2 == 1)
-      {
-        push @Oligos, substr($tov->ChunkSeq, $starte, $strlen);
-        $starte = $starte + $strlen;
-        push @Overlaps, substr($tov->ChunkSeq, $starto, $starte - $starto);
-        $avg_chn_mel += melt(substr($tov->ChunkSeq, $starto, $starte - $starto), $pa{melform}, .05, .0000001);
-      }
-      if ($w % 2 == 0)
-      {
-        push @Oligos, substr($tov->ChunkSeq, $starto, $strlen);
-        $starto = $starto + $strlen;
-        push @Overlaps, substr($tov->ChunkSeq, $starte, $starto - $starte);
-        $avg_chn_mel += melt(substr($tov->ChunkSeq, $starte, $starto - $starte), $pa{melform}, .05, .0000001);
-      }
-      $tov->ShrtOligo(length($Oligos[-1])) if length($Oligos[-1]) <= $tov->ShrtOligo;
-      $tov->LongOligo(length($Oligos[-1])) if length($Oligos[-1]) >= $tov->LongOligo;
-      $avg_oli_len += length($Oligos[-1]);
-    }
-  }
-  $tov->Collisions(\%Collisions);
-  $tov->AvgOlapMelt(int(($avg_chn_mel / scalar(@Overlaps))+.5));
-  $tov->AvgOligoLength(int(($avg_oli_len / scalar(@Oligos))+.5));
-  $tov->Oligos(\@Oligos);
-  $tov->Olaps(\@Overlaps);
-  return;
-}
-
-=head2 make_oligos()
-
-  takes a nucleotide sequence from a Chunk object and breaks it into oligos. A
-  hash reference provides all of the options, like target subchunk length,
-  oligo number, oligo length, etc. returns all oligos on one strand!!!!!!!!!!
-  in: Chunk (struct), Options (hash reference)
-  out: hashref
-  #NO UNIT TESTS
+Basically builds a list of tree nodes for the amb_trans* functions.
+in: 2 x peptide lists (array reference) out: combined list of peptides
   
 =cut
 
-sub make_oligos
+sub _add_arr
 {
-  my ($bbseq, $pa) = @_;
-  my ($tar_chn_len, $tar_cur_dif, $cur_oli_num, $cur_oli_lap, $cur_oli_len,
-    $cur_chn_mel, $cur_oli_gap, $avg_chn_mel, $avg_oli_len,
-    $start, $starte, $starto, $avg) = 0;
-  my (@Overlaps, @tree, @begs, @ends, @Oligos);
-  my %Collisions;
-  my $bblen = length($bbseq);
-  my $bbinfo = {};
-  my $loxp = "ATAACTTCGTATAATGTACATTATACGAAGTTAT";
-
-  $tar_chn_len = $$pa{per_chn_len};
-  $cur_oli_num = $$pa{tar_oli_num};
-  $cur_oli_len = $$pa{tar_oli_len};
-  $cur_oli_gap = $$pa{tar_oli_gap};
-  $cur_oli_lap = $$pa{tar_oli_lap};
-  $tar_cur_dif = $bblen - $tar_chn_len;
-#print "\n<br><br>\nrev 0 ", $tov->ChunkNumber, ", $tar_chn_len bp, dif $tar_cur_dif, num $cur_oli_num, len $cur_oli_len, lap $cur_oli_lap, mel $$pa{tar_chn_mel}<br>";
-  if (abs($tar_cur_dif) >= ($$pa{tar_oli_len}+$$pa{tar_oli_gap}))  ##-if difference btw perfect and current is bigger than another pair of oligos, increment oli_num
+  my ($arr1ref, $arr2ref) = @_;
+  my @arr1 = @$arr1ref;
+  my @arr2 = @$arr2ref;
+  my @arr3 = ();
+  foreach my $do (@arr1)
   {
-    $cur_oli_num = $$pa{tar_oli_num} + (2 * int(($tar_cur_dif / ($$pa{tar_oli_len} + $$pa{tar_oli_gap})) + .5 ));
-    $tar_chn_len = ($cur_oli_num * ($$pa{tar_oli_gap} + $$pa{tar_oli_lap})) + $$pa{tar_oli_lap};
-    $tar_cur_dif = $bblen - $tar_chn_len;
-  }
-  $bbinfo->{SHORTOLIGO} = 2*$$pa{max_oli_len};
-  $bbinfo->{LONGOLIGO} = 0;
-#print "rev 1 ", $tov->ChunkNumber, ", per $tar_chn_len, dif $tar_cur_dif, num $cur_oli_num, len $cur_oli_len, lap $cur_oli_lap, mel $$pa{tar_chn_mel}, tol $$pa{chn_mel_tol}, <br>";
-  if ($$pa{gapswit} == 1)
-  {
-    ##-if difference can be spread equally across oligos, increase length
-    if (abs($tar_cur_dif) >= $cur_oli_num)
+    foreach my $re (@arr2)
     {
-      $cur_oli_len = $$pa{tar_oli_len} + int($tar_cur_dif / $cur_oli_num);
-      $tar_cur_dif = $tar_cur_dif - ($cur_oli_num * (int($tar_cur_dif / $cur_oli_num)));
-    }
-    ##-if the length is violating max_len, increase num by 2, decrease len by 10, recalc
-    if ( ($cur_oli_len >= $$pa{max_oli_len}) || ($cur_oli_len == $$pa{max_oli_len} && $tar_cur_dif > 0) )
-    {
-      $cur_oli_len = $$pa{tar_oli_len}-10;
-      $cur_oli_num += 2;
-      $tar_chn_len = $cur_oli_num*($cur_oli_len - $$pa{tar_oli_lap}) + $$pa{tar_oli_lap};
-      $tar_cur_dif = $bblen - $tar_chn_len;
-      if (abs($tar_cur_dif) >= $cur_oli_num)
-      {
-        $cur_oli_len = $cur_oli_len + int($tar_cur_dif / $cur_oli_num);
-        $tar_cur_dif = $tar_cur_dif - ($cur_oli_num * (int($tar_cur_dif / $cur_oli_num)));
-      }
-    }
-    if ($cur_oli_len >= $$pa{max_oli_len} && $tar_cur_dif > 0)
-    {
-      print "oh no, after rev1, current target is >= the max! $$pa{max_oli_len} --- please tell Sarah the following string.<br> ";
-      print "&nbsp;&nbsp;cur_oli_len $cur_oli_len, cur_oli_num $cur_oli_num, tar_cur_dif $tar_cur_dif, tar_chn_len $tar_chn_len, chunk length ", $bblen, "<br><br>";
-    }
-    my $start = 0;
-    for (my $w = 1; $w <= $cur_oli_num; $w++)          ##-difference now be between 0 and abs(oli_num-1) - so in/decrement individual overlap lengths
-    {
-      my $strlen = $cur_oli_len;
-      $strlen++ if ( $w <= abs($tar_cur_dif) && $tar_cur_dif > 0);
-      $strlen-- if ( $w <= abs($tar_cur_dif) && $tar_cur_dif < 0);
-      push @Overlaps, substr($bbseq, $start + $strlen - $cur_oli_lap, $cur_oli_lap) if ($w != $cur_oli_num);
-      $start =  $start + $strlen - $cur_oli_lap;
-    }
-    @tree = map (melt($_, $$pa{melform} , .05, .0000001), @Overlaps);
-    foreach (@tree)  {  $avg += $_;  }  $avg = int(($avg / scalar(@tree))+.5);
-    $cur_chn_mel = ($avg < ($$pa{tar_chn_mel}-10))  ?  $$pa{tar_chn_mel} - .2*($$pa{tar_chn_mel}-$avg) :  $$pa{tar_chn_mel};  #Adjust target melting temp for reality.
-#print "rev 3 ", $tov->ChunkNumber, ", per $tar_chn_len, dif $tar_cur_dif, num $cur_oli_num, len $cur_oli_len, lap $cur_oli_lap, mel $cur_chn_mel, tol $$pa{chn_mel_tol}, <br>";
-
-    $start = 0;
-    @Overlaps = ();
-    for (my $w = 1; $w <= $cur_oli_num; $w++)          ##-then make oligos, changing overlaps for melting temperature if appropriate
-    {
-      my $laplen = $cur_oli_lap;
-      my $strlen = $cur_oli_len;
-      $strlen++ if ( $w <= abs($tar_cur_dif) && $tar_cur_dif > 0);
-      $strlen-- if ( $w <= abs($tar_cur_dif) && $tar_cur_dif < 0);
-      $laplen-- if ($strlen < $$pa{tar_oli_len} && $cur_oli_len < $$pa{tar_oli_len});#
-      if ($w != $cur_oli_num)
-      {
-
-        unless ($$pa{hardlap})
-        {
-  #    print ".rev3.  $w strlen $strlen, laplen $laplen, num $cur_oli_num, len $cur_oli_len, mel $cur_chn_mel, tol $$pa{chn_mel_tol}, max $$pa{max_oli_len}\n";
-          while (melt(substr($bbseq, $start + $strlen - $laplen, $laplen), $$pa{melform}, .05, .0000001)
-            >= ($cur_chn_mel + $$pa{chn_mel_tol}) && $strlen > $cur_oli_len)
-          {
-  #      print "...deccing<br>";
-            $laplen--;  $strlen--;
-          }
-          while (melt(substr($bbseq, $start + $strlen - $laplen, $laplen), $$pa{melform}, .05, .0000001)
-            <= ($cur_chn_mel - $$pa{chn_mel_tol}) && $strlen < $$pa{max_oli_len})
-          {
-  #      print "...inccing<br>";
-            $laplen++;  $strlen++;
-          }
-           if (substr($bbseq, $start, $strlen) =~ /\A$loxp/)
-            {
-              $start += 5; $strlen -= 5;
-            }
-             elsif (substr($bbseq, $start, $strlen) =~ /$loxp\Z/)
-              {
-                $start -= 5; $strlen -= 5;
-              }
-        }
-        push @Overlaps, substr($bbseq, $start + $strlen - $laplen, $laplen);
-#      print "\t\t$Overlaps[-1]\n";
-        $avg_chn_mel += melt(substr($bbseq, $start + $strlen - $laplen, $laplen), $$pa{melform}, .05, .0000001);
-      }
-      push @Oligos, substr($bbseq, $start, $strlen);
-      push @begs, $start;
-      push @ends, $start + length($Oligos[-1]);
-      $bbinfo->{SHORTOLIGO} = length($Oligos[-1]) if length($Oligos[-1]) < $bbinfo->{SHORTOLIGO};
-      $bbinfo->{LONGOLIGO} = length($Oligos[-1]) if length($Oligos[-1]) > $bbinfo->{LONGOLIGO};
-      $avg_oli_len += length($Oligos[-1]);
-      $start =  $start + $strlen - $laplen;
-    }
-    for (my $w = 0; $w <= $cur_oli_num - 3; $w++)  {  $Collisions{$w} = $ends[$w] - $begs[$w+2]  if ($ends[$w] > $begs[$w+2]);  }
-  }
-  elsif ($$pa{gapswit} == 0)
-  {
-    $cur_oli_len = int((2* $bblen) / ((2*$tar_chn_len) / $$pa{tar_oli_len}));
-    $cur_oli_lap = int($cur_oli_len * .5);
-    $tar_cur_dif = $bblen - ($cur_oli_num * $cur_oli_len * .5 + $cur_oli_lap);
-
-    $starto = $cur_oli_lap + 1;
-    for (my $w = 1; $w <= $cur_oli_num; $w++)          ##-difference should now be between 0 and abs(oli_num-1) - so in/decrement individual overlap lengths
-    {
-      my $strlen = $cur_oli_len;
-      if ( $w <= abs(2 * $tar_cur_dif) && $tar_cur_dif > 0)  {$strlen++;}
-      if ( $w <= abs(2 * $tar_cur_dif) && $tar_cur_dif < 0)  {$strlen--;}
-      if ($w % 2 == 1)
-      {
-        push @Oligos, substr($bbseq, $starte, $strlen);
-        $starte = $starte + $strlen;
-        push @Overlaps, substr($bbseq, $starto, $starte - $starto);
-        $avg_chn_mel += melt(substr($bbseq, $starto, $starte - $starto), $$pa{melform}, .05, .0000001);
-      }
-      if ($w % 2 == 0)
-      {
-        push @Oligos, substr($bbseq, $starto, $strlen);
-        $starto = $starto + $strlen;
-        push @Overlaps, substr($bbseq, $starte, $starto - $starte);
-        $avg_chn_mel += melt(substr($bbseq, $starte, $starto - $starte), $$pa{melform}, .05, .0000001);
-      }
-      $bbinfo->{SHORTOLIGO} = length($Oligos[-1]) if length($Oligos[-1]) < $bbinfo->{SHORTOLIGO};
-      $bbinfo->{LONGOLIGO} = length($Oligos[-1]) if length($Oligos[-1]) > $bbinfo->{LONGOLIGO};
-      $avg_oli_len += length($Oligos[-1]);
+      push @arr3, $do . $re
     }
   }
-  $bbinfo->{COLLISIONS} = \%Collisions;
-  $bbinfo->{AVGOLAPMELT} = int(($avg_chn_mel / scalar(@Overlaps))+.5);
-  $bbinfo->{AVGOLIGOLEN} = int(($avg_oli_len / scalar(@Oligos))+.5);
-  $bbinfo->{OLIGOS} = \@Oligos;
-  $bbinfo->{OLAPS} = \@Overlaps;
-  return $bbinfo;
-}
-
-=head2 define_oligos()
-  
-  #NO UNIT TESTS
-
-=cut
-
-sub define_oligos
-{
-  my ($ollist_ref, $revcompswit) = @_;
-  my %OL_DATA;
-  ( $OL_DATA{REGEX},  $OL_DATA{CLEAN} ) = ( {}, {} );
-  foreach my $oligo (@$ollist_ref)
-  {
-    $OL_DATA{CLEAN}->{$oligo}  = $oligo;    #recognition site
-  #regular expression array
-    my @arr = ( $revcompswit == 1 && complement($oligo, 1) ne $oligo)  ?
-          ( regres($oligo, 1), regres(complement($oligo, 1), 1) )  :
-          ( regres($oligo, 1) );
-    $OL_DATA{REGEX}->{$oligo} = \@arr;
-  }
-  #close IN;
-  return \%OL_DATA;
-}
-
-=head2 dotplot()
-
-  #NO UNIT TESTS
-
-=cut
-
-sub dotplot
-{
-	my ($seq1, $seq2, $winsize, $stringency, $outfile) = @_;
-	my $Lseq1 = length($seq1);
-	my $Lseq2 = length($seq2);
-
-	my $BitMap = GD::Image->new($Lseq1, $Lseq2);
-
-	my $white = $BitMap->colorAllocate(255,255,255);
-	my $black = $BitMap->colorAllocate(0,0,0);
-
-	$BitMap->transparent($white);
-
-	for (my $i=1;$i<=$Lseq1-$winsize;$i++){
-		for (my $j=1;$j<=$Lseq2-$winsize;$j++){
-			my $match=0;
-			for (my $w=1;$w<=$winsize;$w++){
-				if(substr($seq1, $i+$w, 1) eq substr($seq2, $j+$w, 1)){
-					$match++;
-				}
-			}
-			if($match >= $stringency){
-				$BitMap->setPixel($i, $j, $black);
-			}
-		}
-	}
-
-	open   (IMG, ">$outfile") or die $!;
-	binmode IMG;
-	print   IMG $BitMap->png;
-	close   IMG;
+  return @arr3;
 }
 
 1;
@@ -855,29 +444,33 @@ __END__
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (c) 2011, GeneDesign developers
+Copyright (c) 2013, GeneDesign developers
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
-    * Redistributions of source code must retain the above copyright
-      notice, this list of conditions and the following disclaimer.
-    * Redistributions in binary form must reproduce the above copyright
-      notice, this list of conditions and the following disclaimer in the
-      documentation and/or other materials provided with the distribution.
-    * Neither the name of the Johns Hopkins nor the
-      names of the developers may be used to endorse or promote products
-      derived from this software without specific prior written permission.
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
+
+* Redistributions of source code must retain the above copyright notice, this
+list of conditions and the following disclaimer.
+
+* Redistributions in binary form must reproduce the above copyright notice, this
+list of conditions and the following disclaimer in the documentation and/or
+other materials provided with the distribution.
+
+* The names of Johns Hopkins, the Joint Genome Institute, the Lawrence Berkeley
+National Laboratory, the Department of Energy, and the GeneDesign developers may
+not be used to endorse or promote products derived from this software without
+specific prior written permission.
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
 ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
 WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE DEVELOPERS BE LIABLE FOR ANY
-DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+DISCLAIMED. IN NO EVENT SHALL THE DEVELOPERS BE LIABLE FOR ANY DIRECT, INDIRECT,
+INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 =cut

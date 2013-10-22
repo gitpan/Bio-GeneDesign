@@ -8,7 +8,7 @@ GeneDesign::Codons
 
 =head1 VERSION
 
-Version 3.05
+Version 5.50
 
 =head1 DESCRIPTION
 
@@ -16,275 +16,372 @@ GeneDesign functions for codon analysis and manipulation
 
 =head1 AUTHOR
 
-Sarah Richardson <notadoctor@jhu.edu>.
+Sarah Richardson <SMRichardson@lbl.gov>.
 
 =cut
 
 package Bio::GeneDesign::Codons;
 require Exporter;
 
-use Bio::GeneDesign::Basic qw(regres %AACIDS $ambnt %NTIDES complement @NTS);
-use List::Util qw(shuffle max first);
-use Perl6::Slurp;
+use Bio::GeneDesign::Basic qw(:GD);
+use Math::Combinatorics qw(combine);
+use List::Util qw(max first);
+use File::Basename;
 use Carp;
 
 use strict;
 use warnings;
 
-use vars qw($VERSION @ISA @EXPORT_OK %EXPORT_TAGS);
-$VERSION = 3.05;
+our $VERSION = 5.50;
 
-@ISA = qw(Exporter);
-@EXPORT_OK = qw(
-  define_codons
-  define_codon_table
-  define_reverse_codon_table
-  define_RSCU_values
-  parse_RSCU_values
-  translate
-  amb_transcription
-  reverse_translate
-  degcodon_to_aas
-  amb_translation
-  pattern_finder
-  pattern_remover
-  pattern_adder
-  pattern_aligner
-  change_codons
-  RSCU_filter
-  is_ORF
-  minimize_local_alignment_dp
-  define_codon_percentages
-  index_codon_percentages
-  codon_count
-  generate_RSCU_values
-  define_aa_defaults
-  orf_finder
-  $strcodon
+use base qw(Exporter);
+our @EXPORT_OK = qw(
+  _translate
+  _reverse_codon_table
+  _parse_organisms
+  _parse_codon_file
+  _subtract
+  _codon_count
+  _generate_RSCU_table
+  _generate_codon_report
+  _generate_codon_file
+  _amb_translation
+  _degcodon_to_aas
+  _find_in_frame
+  _minimize_local_alignment_dp
+  _define_codons
+  _pattern_aligner
+  _pattern_adder
+  _codon_change_type
   $VERSION
 );
+our %EXPORT_TAGS =  ( GD => \@EXPORT_OK );
 
-%EXPORT_TAGS =  (
-  all => \@EXPORT_OK,
-  basic => [qw(define_codons define_codon_table define_RSCU_values translate
-    is_ORF)]);
+my $CODLINE = qr/^ \{ ([ATCG]{3}) \} \s* = \s* (.+) $/x;
+my %ambtransswits = map {$_ => 1} qw(1 2 3 -1 -2 -3 s t);
 
-our $strcodon  = qr/[ATCG]{3}/;
-
-#my @out =  map { $_ . " (" . $CODON_TABLE->{$_} . ") ". $RSCUVal->{$_} ."\n"}
-#      sort {  $CODON_TABLE->{$a} cmp $CODON_TABLE->{$b}
-#        ||  $RSCUVal->{$b} <=> $RSCUVal->{$a}}
-#      keys %$RSCUVal;
-
-=head2 define_codons
-
-  Generates an array reference that contains every possible nucleotide codon
-  out : list of codons (array reference)
+=head2 parse_organisms
 
 =cut
 
-sub define_codons
+sub _parse_organisms
+{
+  my ($path) = @_;
+  my ($orgs, $cods) = ({}, {});
+  opendir (my $CODDIR, $path) || croak "can't opendir $path";
+  foreach my $table (readdir($CODDIR))
+  {
+    my $name = basename($table);
+    $name =~ s{\.[^.]+$}{}x;
+    if ($table =~ /\.rscu\Z/x)
+    {
+      $orgs->{$name} = $path . $table;
+    }
+    elsif ($table =~ /\.ct\Z/x)
+    {
+      $cods->{$name} = $path . $table;
+    }
+  }
+  closedir($CODDIR);
+  return ($orgs, $cods);
+}
+
+=head2 parse_codon_file
+
+=cut
+
+sub _parse_codon_file
+{
+  my ($path) = @_;
+  open (my $CFILE, "<", $path) || croak "Can't open $path : $!";
+  my $ref = do { local $/ = <$CFILE> };
+  close $CFILE;
+  my @lines = split(/\n/x, $ref);
+  my $cods = {};
+  foreach my $line (grep {$_ !~ /^\#/x} @lines)
+  {
+    if ($line =~ $CODLINE)
+    {
+      $cods->{$1} = $2;
+    }
+    else
+    {
+      croak "Badly formatted definition in codon file $path: $line";
+    }
+  }
+  my @codons = _define_codons();
+  foreach my $codon (@codons)
+  {
+    croak "$path table is missing definition for codon $codon"
+      unless (exists $cods->{$codon});
+  }
+  return $cods;
+}
+
+=head2 reverse_codon_table()
+
+Takes a codon table hashref and reverses it such that each key is a one letter
+amino acid residue and each value is an array reference containing all of the
+codons that can code for that residue.
+  
+=cut
+
+sub _reverse_codon_table
+{
+  my ($codontable) = @_;
+  my $revcodon_t = {};
+  foreach my $codon (keys %$codontable)
+  {
+    my $aa = $codontable->{$codon};
+    $revcodon_t->{$aa} = [] if ( ! exists $revcodon_t->{$aa} );
+    push @{$revcodon_t->{$aa}}, $codon;
+  }
+  return $revcodon_t;
+}
+
+=head2 _translate()
+
+takes a nucleotide sequence, a frame, and a codon table and returns that frame
+translated into amino acids.
+  
+=cut
+
+sub _translate
+{
+  my ($nucseq, $frame, $codon_t) = @_;
+  croak ("translate requires an unambiguous nucleotide sequence\n")
+    if ($nucseq =~ $ambnt);
+  $nucseq = _complement($nucseq, 1) if ($frame < 0);
+  my $peptide = q{};
+  for (my $offset = abs($frame)-1; $offset < length($nucseq); $offset += 3)
+  {
+    my $codon = substr($nucseq, $offset, 3);
+    $peptide .= $codon_t->{$codon} if (exists $codon_t->{$codon});
+  }
+  return $peptide;
+}
+
+=head2 _subtract
+
+=cut
+
+sub _subtract
+{
+  my ($oldseq, $pattern, $regarr, $codon_t, $rscu_t, $revcodon_t) = @_;
+  my $seq = $oldseq;
+  my $temphash = _positions($seq, $regarr);
+  foreach my $gpos (keys %$temphash)
+  {
+    my $framestart = ($gpos) % 3;
+    my $startpos = int( length($temphash->{$gpos}) / 3 + 2 ) * 3;
+    my $string = substr($seq, $gpos - $framestart, $startpos);
+    my $newrepseg = $string;
+    
+    my %newseqs;
+    my $len = length($string)/3;
+    my $curval = _rscu_sum($rscu_t, $string);
+    #compute the changes possible
+    for my $it (1..$len)
+    {
+      my @map = map { join q{}, sort @$_ } combine($it,(1..$len));
+      foreach my $guide (@map)
+      {
+        my $rscuers = {};
+        my @coords = sort split(q{}, $guide);
+        $rscuers->{0} = [$string];
+        my $passthrough = 0;
+        foreach my $coord (@coords)
+        {
+          my $srcarr = $rscuers->{$passthrough};
+          foreach my $str (@$srcarr)
+          {
+            my $coda = substr($str, $coord*3-3, 3);
+            foreach my $codb (grep {$coda ne $_}
+                              @{$revcodon_t->{$codon_t->{$coda}}})
+            {
+              my $newstr = $str;
+              #substr($newstr, $coord*3-3, 3) = $codb;
+              substr($newstr, $coord*3-3, 3, $codb);
+              push @{$rscuers->{$passthrough+1}}, $newstr;
+            }
+          }
+          $passthrough++;
+        }
+        foreach my $newseq (@{$rscuers->{$passthrough}})
+        {
+          my $a = _rscu_sum($rscu_t, $newseq);
+          my $b = _compare_sequences($string, $newseq);
+          $newseqs{$newseq} = [sprintf("%.2f",abs($a - $curval)), $b->{D}];
+        }
+      }
+    }
+    #try all the changes
+    foreach my $newseq (sort {$newseqs{$a}->[0] <=> $newseqs{$b}->[0]
+                           || $newseqs{$a}->[1] <=> $newseqs{$b}->[1]}
+                        keys %newseqs)
+    {
+      if ($newseq !~ $pattern && _complement($newseq, 1) !~ $pattern)
+      {
+        $newrepseg = $newseq;
+        last;
+      }
+    }
+                                    
+    #substr($seq, $gpos - $framestart, length($newrepseg)) = $newrepseg;
+    substr($seq, $gpos - $framestart, length($newrepseg), $newrepseg);
+  }
+  return $seq;
+}
+
+=head2 _rscu_sum()
+  
+=cut
+
+sub _rscu_sum
+{
+  my ($rscu_t, $ntseq) = @_;
+  my $offset = 0;
+  my $rscusum = 0;
+  my $length = length($ntseq);
+  while ($offset < $length)
+  {
+    my $cod = substr($ntseq, $offset, 3);
+    $rscusum += $rscu_t->{$cod};
+    $offset += 3;
+  }
+  return $rscusum;
+}
+
+=head2 _codon_count()
+
+takes a reference to an array of sequences and returns a hash with codons as
+keys and the number of times the codon occurs as a value.
+  
+=cut
+
+sub _codon_count
+{
+  my ($seqs, $codon_t, $hashref) = @_;
+  my %blank = map {$_ => 0} keys %$codon_t;
+  my $codoncount = $hashref || \%blank;
+  foreach my $seq (@$seqs)
+  {
+    my @arr = ($seq =~ m/ [ATCG]{3} /xg);
+    foreach my $codon (@arr)
+    {
+      $codoncount->{$codon}++;
+    }
+  }
+  return $codoncount;
+}
+
+=head2 generate_RSCU_table()
+
+takes a hash reference with keys as codons and values as number of times
+those codons occur (it helps to use codon_count) and returns a hash with each
+codon and its RSCU value
+  
+=cut
+
+sub _generate_RSCU_table
+{
+  my ($codon_count, $codon_t, $revcodon_t) = @_;
+  my $RSCU_hash = {};
+  foreach my $codon (sort grep {$_ ne "XXX"} keys %$codon_count)
+  {
+    my $x_j = 0;
+    my $x = $codon_count->{$codon};
+    my $family = $revcodon_t->{$codon_t->{$codon}};
+    my $family_size = scalar(@$family);
+    foreach (grep {exists $codon_count->{$_}} @$family)
+    {
+      $x_j += $codon_count->{$_};
+    }
+    my $rscu = $x_j > 0 ? $x / ($x_j / $family_size) : 0.00;
+    $RSCU_hash->{$codon} = sprintf("%.2f",  $rscu ) ;
+  }
+  return $RSCU_hash;
+}
+
+=head2 _generate_codon_report
+
+=cut
+
+sub _generate_codon_report
+{
+  my ($codon_count, $codon_t, $rscu_t) = @_;
+  my $string = "Codon counts and RSCU values:\n";
+  my @codvalsort = sort {$b <=> $a} values %{$codon_count};
+  my $maxcodnum = $codvalsort[0];
+  foreach my $a ( qw(T C A G))
+  {
+    $string .= "\n";
+    foreach my $c ( qw(T C A G) )
+    {
+      foreach my $b ( qw(T C A G) )
+      {
+        my $codon = $a . $b . $c;
+        my $count = $codon_count->{$codon};
+        my $spacer = q{ } x (length($maxcodnum) - length($count));
+        $string .=  "$codon (" . $codon_t->{$codon} . ") $spacer$count ";
+        $string .=  $rscu_t->{$codon} . q{ } x 5;
+      }
+      $string .= "\n";
+    }
+    $string .= "\n";
+  }
+  return $string;
+}
+
+=head2 _generate_codon_file
+
+=cut
+
+sub _generate_codon_file
+{
+  my ($table, $rev_cod_t, $comments) = @_;
+  my $string = q{};
+  my @cs = @$comments;
+  $string .= "# " . $_  . "\n" foreach (@cs);
+  foreach my $aa (sort keys %$rev_cod_t)
+  {
+    my @codons = @{$rev_cod_t->{$aa}};
+    $string .= "#$aa\n";
+    foreach my $codon (sort @codons)
+    {
+      $string .= "{$codon} = $table->{$codon}\n";
+    }
+  }
+  return $string;
+}
+
+=head2 _define_codons
+
+Generates an array reference that contains every possible nucleotide codon
+
+=cut
+
+sub _define_codons
 {
   my @codons;
-  foreach my $a (@NTS)
+  foreach my $a (qw(A T C G))
   {
-    foreach my $b (@NTS)
+    foreach my $b (qw(A T C G))
     {
-      foreach my $c (@NTS)
+      foreach my $c (qw(A T C G))
       {
         push @codons, $a . $b . $c;
       }
     }
   }
-  return \@codons;
+  return @codons;
 }
 
-=head2 define_codon_table()
+=head2 _amb_translation()
 
-  Brings into memory a codon table from a file in GeneDesign's configuration
-   directory. The table is represented as a hashref, where each key is a three
-   letter nucleotide codon and each value is a one letter amino acid residue.
-  in: name of a .ct file and the GD config hashref
-  out: codon table (hash reference)
-  
-=cut
+takes a nucleotide that may be degenerate and a codon table and returns a list
+of all amino acid sequences that nucleotide sequence could be translated into.
 
-sub define_codon_table
-{
-  my ($org, $GD) = @_;
-  croak ("No organism provided\n") unless ($org);
-  croak ("No configuration hashref provided\n") unless ($GD);
-  my $CODON_TABLE = {};
-  my $target = exists($GD->{CODONTABLES}->{$org}) ? $org  : "Standard";
-  my $filepath = $GD->{codon_dir} . '/' . $target . ".ct";
-  my @arr = slurp($filepath);
-  my @codlines = grep {$_ !~ /\#/} @arr;
-  foreach my $line (@codlines)
-  {
-    my ($cod, $rscu) = ($1, $2) if ($line =~ /\{([\w]{3})\} = ([\w\*]{1})/);
-    $CODON_TABLE->{$cod} = $rscu;
-  }
-  my $codonaref = define_codons();
-  foreach my $codon (@$codonaref)
-  {
-    croak("$target codon table missing definition for codon $codon\n")
-      unless (exists $CODON_TABLE->{$codon});
-  }
-  return $CODON_TABLE;
-}
-
-=head2 define_reverse_codon_table()
-
-  Takes a codon table hashref and reverses it such that each key is a one letter
-   amino acid residue and each value is an array reference containing all of the
-   codons that can code for that residue.
-  in: codon table (hash reference)
-  out: reverse codon table (hash reference)
-  
-=cut
-
-sub define_reverse_codon_table
-{
-  my ($CODON_TABLE) = @_;
-  my $REV_CODON_TABLE = {};
-  foreach my $codon (keys %$CODON_TABLE)
-  {
-    my $aa = $CODON_TABLE->{$codon};
-    $REV_CODON_TABLE->{$aa} = [] if ( ! exists $REV_CODON_TABLE->{$aa} );
-    push @{$REV_CODON_TABLE->{$aa}}, $codon;
-  }
-  return $REV_CODON_TABLE;
-}
-
-=head2 define_RSCU_values()
-
-  Brings into memory an RSCU table from a file in GeneDesign's configuration
-   directory. The table is represented as a hashref, where each key is a three
-   letter nucleotide codon and each value is a three digit float.
-  in: path to a .rscu file and the GD config hashref
-  out: RSCU value table (hash reference)
-  
-=cut
-
-sub define_RSCU_values
-{
-  my ($org, $GD) = @_;
-  croak ("No organism provided\n") unless ($org);
-  croak ("No configuration hashref provided\n") unless ($GD);
-  my $filepath = $GD->{codon_dir} . '/' . $org . ".rscu";
-  my $RSCU_TABLE = parse_RSCU_values($filepath);
-  return $RSCU_TABLE;
-}
-
-=head2 parse_RSCU_values
-
-=cut
-
-sub parse_RSCU_values
-{
-  my ($path) = @_;
-  croak ("No path provided\n") unless ($path);
-  my $RSCU_TABLE = {};
-  my @arr = slurp($path);
-  my @codlines = grep {$_ !~ /\#/} @arr;
-  foreach my $line (@codlines)
-  {
-    my ($cod, $rscu) = ($1, $2) if ($line =~ /\{([\w]{3})\} = ([\d\.]+)/);
-    $RSCU_TABLE->{$cod} = $rscu;
-  }
-  my $codonaref = define_codons();
-  foreach my $codon (@$codonaref)
-  {
-    croak("RSCU table missing definition for codon $codon\n")
-      unless (exists $RSCU_TABLE->{$codon});
-  }
-  return $RSCU_TABLE;
-}
-
-=head2 translate()
-
-  takes a nucleotide sequence, a frame, and a codon table and returns that frame
-  translated into amino acids.
-  in: nucleotide sequence (string),
-      switch for frame (+/-1, +/-2, or +/-3),
-      codon table (hash reference)
-  out: amino acid sequence (string)
-  
-=cut
-
-sub translate
-{
-  my ($nucseq, $swit, $CODON_TABLE) = @_;
-  croak ("translate needs an unambiguous nucleotide sequence\n")
-    if ( ! $nucseq  ||  $nucseq =~ $ambnt);
-  $nucseq = complement($nucseq, 1) if ($swit < 0);
-  my $peptide = "";
-  for (my $offset = abs($swit)-1; $offset < length($nucseq); $offset += 3)
-  {
-    my $codon = substr($nucseq, $offset, 3);
-    $peptide .= $CODON_TABLE->{$codon} if (exists $CODON_TABLE->{$codon});
-  }
-  return $peptide;
-}
-
-=head2 reverse_translate()
-
-  takes an amino acid sequence and a specific codon table and returns that frame
-  translated into amino acids.  See gdRevTrans.cgi for use.
-  in: nucleotide sequence (string),
-      switch for frame (1, 2, or 3),
-      codon table (hash reference)
-  out: amino acid sequence (string)
-
-=cut
-
-sub reverse_translate
-{
-  my($aaseq, $codonhash) = @_;
-  my $newseq = "";
-  $newseq .= $codonhash->{$_} foreach (split('', $aaseq));
-  return $newseq;
-}
-
-=head2 degcodon_to_aas()
-
-  takes a codon that may be degenerate and a codon table and returns a list of
-  all amino acids that codon could represent. If a hashref is provided with
-  previous answers, it will run MUCH faster.
-  in: codon (string),
-      codon table (hash reference)
-  out: amino acid list (vector)
-  
-=cut
-
-sub degcodon_to_aas
-{
-  my ($codon, $CODON_TABLE, $xlationref) = @_;
-  return if ( ! $codon  ||  length($codon) != 3);
-  my (@answer, %temphash) = ((), ());
-  if (exists $xlationref->{$codon})
-  {
-    return @{$xlationref->{$codon}};
-  }
-  elsif ($codon eq "NNN")
-  {
-    %temphash = map { $_ => 1} values %$CODON_TABLE;
-    @answer = keys %temphash;
-  }
-  else
-  {
-    my $reg = regres($codon, 1);
-    %temphash = map {$CODON_TABLE->{$_}  => 1} grep { $_ =~ $reg } keys %$CODON_TABLE;
-    @answer = keys %temphash;
-  }
-  $xlationref->{$codon} = \@answer;
-  return @answer;
-}
-
-=head2 amb_translation()
-
-  takes a nucleotide that may be degenerate and a codon table and returns a list
-  of all amino acid sequences that nucleotide sequence could be translated into.
   in: nucleotide sequence (string),
       codon table (hash reference),
       optional switch to force only a single frame of translation
@@ -293,12 +390,10 @@ sub degcodon_to_aas
   
 =cut
 
-sub amb_translation
+sub _amb_translation
 {
-  my ($site, $CODON_TABLE, $swit, $xlationref) = @_;
-  croak ("Bad frame argument\n") if ($swit ne "1" && $swit ne "2"
-    && $swit ne "3"  && $swit ne "-1" && $swit ne "-2" && $swit ne "-3"
-    && $swit ne "s" && $swit ne "t");
+  my ($seq, $codon_t, $swit, $memo) = @_;
+  croak ("Bad frame argument\n") unless exists $ambtransswits{$swit};
   if ($swit eq "s" || $swit eq "t")
   {
     my @frames = qw(1 2 3);
@@ -306,20 +401,21 @@ sub amb_translation
     my (%RES);
     foreach my $s (@frames)
     {
-      my @set = amb_translation($site, $CODON_TABLE, $s, $xlationref);
-      $RES{$_}++ foreach(@set);
+      my @pep_set = _amb_translation($seq, $codon_t, $s, $memo);
+      $RES{$_}++ foreach (@pep_set);
     }
     return keys %RES;
   }
   else
   {
     my (%RES, @SEED, @NEW);
-    $site = complement($site, 1) if ($swit < 0);
-    $site = 'N' x (abs($swit) - 1) . $site if (abs($swit) < 4);
+    $seq = _complement($seq, 1) if ($swit < 0);
+    $seq = 'N' x (abs($swit) - 1) . $seq if (abs($swit) < 4);
+    my $seqlen = length($seq);
     my $gothrough = 0;
-    for (my $offset = 0; $offset < (length($site)); $offset +=3)
+    for (my $offset = 0; $offset < $seqlen; $offset += 3)
     {
-      my $tempcodon = substr($site, $offset, 3);
+      my $tempcodon = substr($seq, $offset, 3);
       $tempcodon .= "N" while (length($tempcodon) % 3);
       if (!$swit)
       {
@@ -327,12 +423,12 @@ sub amb_translation
       }
       if ($gothrough == 0)
       {
-        @SEED = degcodon_to_aas($tempcodon, $CODON_TABLE, $xlationref) ;
+        @SEED = _degcodon_to_aas($tempcodon, $codon_t, $memo) ;
       }
       else
       {
-        @NEW  = degcodon_to_aas($tempcodon, $CODON_TABLE, $xlationref);
-        @SEED = combine(\@SEED, \@NEW);
+        @NEW  = _degcodon_to_aas($tempcodon, $codon_t, $memo);
+        @SEED = _add_arr(\@SEED, \@NEW);
       }
       $gothrough++;
     }
@@ -341,642 +437,67 @@ sub amb_translation
   }
 }
 
-=head2 amb_transcription()
+=head2 _degcodon_to_aas()
 
-  takes a nucleotide sequence that may have ambiguous bases and returns a list
-   of all possible non ambiguous nucleotide sequences it could represent
-  in: nucleotide sequence (string),
-      codon table (hash reference),
-      reverse codon table (hash reference)
-  out: nucleotide sequence list (vector)
+takes a codon that may be degenerate and a codon table and returns a list of
+all amino acids that codon could represent. If a hashref is provided with
+previous answers, it will run MUCH faster (memoization).
 
-=cut
-
-sub amb_transcription
-{
-  # has test in t/02-codons.t
-  my ($ntseq, $CODON_TABLE, $pepseq) = @_;
-  my (@SEED, @NEW) = ((), ());
-  my $offset = 0;
-  if ( !$pepseq )
-  {
-    while ($offset < length($ntseq))
-    {
-      my $template = substr($ntseq, $offset, 3);
-      my $regtemp = regres($template);
-      if ($template !~ $ambnt)
-      {
-        @SEED = ( $template ) if ($offset == 0);
-        @NEW  = ( $template ) if ($offset >  0);
-      }
-      else
-      {
-        my @TEMP = grep { $_ =~ $regtemp } keys %$CODON_TABLE;
-        @SEED = @TEMP if ($offset == 0);
-        @NEW  = @TEMP if ($offset >  0);
-      }
-      unless ($offset == 0)
-      {
-        @SEED = combine(\@SEED, \@NEW);
-      }
-      $offset += 3;
-    }
-  }
-  else
-  {
-    my $REV_CODON = define_reverse_codon_table($CODON_TABLE);
-    my @each = split("", $pepseq);
-    while ($offset < scalar(@each))
-    {
-      my $codon = substr($ntseq, $offset*3, 3);
-      my $peptide = $each[$offset];
-      my @TEMP = grep {$_ =~ regres($codon, 1)} @{$REV_CODON->{$peptide}};
-      @SEED = @TEMP if ($offset == 0);
-      @NEW  = @TEMP if ($offset >  0);
-      unless ($offset == 0)
-      {
-        @SEED = combine(\@SEED, \@NEW);
-      }
-      $offset++;
-    }
-  }
-  my %hsh = map {$_ => 1 } @SEED;
-  return keys %hsh;
-#  return grep {translate($_, 1, $hashref) eq $pepseq} keys %SEED_TOTAL if ($pepseq);
-}
-
-=head2 combine
-
-  Basically builds a list of tree nodes for the amb_trans* functions.
-  in: 2 x peptide lists (array reference) out: combined list of peptides
-  
-=cut
-
-sub combine
-{
-  my ($arr1ref, $arr2ref) = @_;
-  my @arr3 = ();
-  foreach my $do (@$arr1ref)
-  {
-    push @arr3, $do . $_ foreach (@$arr2ref)
-  }
-  return @arr3;
-}
-
-=head2 pattern_finder
-
-=cut
-
-sub pattern_finder
-{
-  # has test in t/02-codons.t
-  my ($strand, $pattern, $swit, $frame, $CODON_TABLE) = @_;
-  my @positions = ();
-  if ($swit == 2)
-  {
-    return if (! $frame || ! $CODON_TABLE);
-    $strand = translate($strand, $frame, $CODON_TABLE)
-  }
-  my $exp = regres($pattern, $swit);
-  while ($strand =~ /(?=$exp)/ig)
-  {
-    push @positions, (pos $strand);
-  }
-  return @positions;
-}
-
-=head2 pattern_remover()
-
-  takes a nucleotide sequence, a nucleotide "pattern" to be removed, and a few
-  codon tables, and returns an edited nucleotide sequence that is missing the
-  pattern (if possible).  Ranks codon replacements by RSCU differences to
-  minimize expression damage.
-  in: nucleotide sequence (string),
-      nucleotide pattern (string),
-      codon table (hash reference),
-      RSCU value table (hash reference)
-  out: nucleotide sequence (string) OR null
-  
-=cut
-
-sub pattern_remover
-{
-  # has tests in t/02-codons.t
-  my ($critseg, $pattern, $CODON_TABLE, $RSCU_TABLE) = @_;
-  my @patterns;
-  if (ref($pattern) eq "ARRAY")
-  {
-    @patterns = @{$pattern};
-  }
-  else
-  {
-    push @patterns, $pattern;
-  }
-  my $REV_CODON_TABLE = define_reverse_codon_table($CODON_TABLE);
-  my %changes;
-  # for each codon position, get RSCU difference possibilities
-  for (my $offset = 0; $offset < length($critseg); $offset += 3)
-  {
-    my $codono = substr($critseg, $offset, 3);
-    foreach my $codonp (  grep { $codono ne $_}
-                @{ $REV_CODON_TABLE->{ $CODON_TABLE->{$codono} } } )
-    {
-      my $id = $offset . "." . $codono . "." . $codonp;
-      $changes{$id}->{DRSCU} = abs($RSCU_TABLE->{$codonp} - $RSCU_TABLE->{$codono});
-      $changes{$id}->{OFFSET} = $offset;
-      $changes{$id}->{OLDCOD} = $codono;
-      $changes{$id}->{NEWCOD} = $codonp;
-    }
-  }
-  #Replace the least different codons one at a time, take first solution
-  foreach my $id (sort {$changes{$a}->{DRSCU} <=> $changes{$b}->{DRSCU}} keys %changes)
-  {
-    my $copy = $critseg;
-    substr($copy, $changes{$id}->{OFFSET}, 3) = $changes{$id}->{NEWCOD};
-    next if ($copy =~ $patterns[0] || complement($copy, 1) =~ $patterns[0]);
-    next if ($patterns[1] && ($copy =~ $patterns[1] || complement($copy, 1) =~ $patterns[1]));
-    return $copy;
-  }
-  #Try pairwise combinations of codons, sorted by sum of RSCU difference
-  my @singles = keys %changes;
-  my @pairs;
-  for my $x (0..scalar(@singles)-1)
-  {
-    for my $y ($x+1..scalar(@singles)-1)
-    {
-      if ($changes{$singles[$x]}->{OFFSET} != $changes{$singles[$y]}->{OFFSET})
-      {
-        push @pairs, [$singles[$x], $singles[$y]];
-      }
-    }
-  }
-  @pairs = sort {($changes{$a->[0]}->{DRSCU} + $changes{$a->[1]}->{DRSCU})
-            <=>  ($changes{$b->[0]}->{DRSCU} + $changes{$b->[1]}->{DRSCU})} @pairs;
-  foreach my $pair (@pairs)
-  {
-    my ($one, $two) = @$pair;
-    my $copy = $critseg;
-    substr($copy, $changes{$one}->{OFFSET}, 3) = $changes{$one}->{NEWCOD};
-    substr($copy, $changes{$two}->{OFFSET}, 3) = $changes{$two}->{NEWCOD};
-    next if ($copy =~ $patterns[0] || complement($copy, 1) =~ $patterns[0]);
-    next if ($patterns[1] && ($copy =~ $patterns[1] || complement($copy, 1) =~ $patterns[1]));
-    return $copy;
-  }
-  return 0;#$critseg;
-}
-
-=head2 pattern_adder()
-
-  takes a nucleotide sequence, a nucleotide "pattern" to be interpolated, and
-  the codon table, and returns an edited nucleotide sequence that contains the
-  pattern (if possible).
-  in: nucleotide sequence (string),
-      nucleotide pattern (string),
-      codon table (hash reference),
-      RSCU value table (hash reference)
-  out: nucleotide sequence (string) OR null
-  
-=cut
-
-sub pattern_adder
-{
-  # has test in t/02-codons.t
-  my ($oldpatt, $newpatt, $CODON_TABLE, $xlationref) = @_;
-  #assume that critseg and pattern come in as complete codons
-  # (i.e., have been run through pattern_aligner)
-  my $REV_CODON_TABLE = define_reverse_codon_table($CODON_TABLE);
-  my $copy = "";
-  for (my $offset = 0; $offset < length($oldpatt); $offset += 3)
-  {
-    my $curcod = substr($oldpatt, $offset, 3);
-    my $curtar = substr($newpatt, $offset, 3);
-    foreach my $g (degcodon_to_aas($curcod, $CODON_TABLE, $xlationref))
-    {
-      $copy .= $curcod =~ regres($curtar)
-           ? $curcod
-           : first { compareseqs($curtar, $_) } @{$REV_CODON_TABLE->{$g}};
-      # print "\t\tpatadd\t($curcod, $curtar)\t$copy<br>\n";
-    }
-  }
-  # print "\t\tpatadd $copy from $oldpatt\n";
-  return length($copy) == length($oldpatt)  ?  $copy  :  0;
-}
-
-=head2 is_ORF()
-
-  takes a nucleotide sequence and a codon table and determines whether or not
-  the nucleotide sequence is a simple ORF - that is, starts with an ATG codon
-  and contains no stop codons in the first frame until the very end.
-  in: nucleotide sequence (string),
-      codon table (hash reference),
-  out: 1 if ORF, 0 if not
-  
-=cut
-
-sub is_ORF
-{
-  my ($nucseq, $CODON_TABLE) = @_;
-  my @war2 = pattern_finder($nucseq, "*", 2, 1, $CODON_TABLE);
-  return 0 if (scalar(@war2) > 1);
-  return 0 if (scalar(@war2) &&
-               ($war2[0] + 1) != length(translate($nucseq, 1, $CODON_TABLE)));
-  return 1;
-}
-
-=head2 compareseqs
-
-=cut
-
-sub compareseqs
-{
-  my ($cur, $tar) = @_;
-  return 1 if ($tar =~ regres($cur, 1) || $cur =~ regres($tar, 1));
-  return 0;
-}
-
-=head2 pattern_aligner()
-
-  takes a nucleotide sequence, a pattern, a peptide sequence, and a codon table
-  and inserts Ns before the pattern until they align properly. This is so a
-  pattern can be inserted out of frame.
-  in: nucleotide sequence (string),
-      nucleotide pattern (string),
-      amino acid sequence (string),
+  in: codon (string),
       codon table (hash reference)
-  out: nucleotide pattern (string)
+  out: amino acid list (vector)
   
 =cut
 
-sub pattern_aligner
+sub _degcodon_to_aas
 {
-  # has tests in t/02-codons.t
-  my ($critseg, $pattern, $peptide, $CODON_TABLE, $swit, $xlationref) = @_;
-  $swit = 0 if (!$swit);
-  my $diff = length($critseg) - length($pattern);
-  my ($newpatt, $nstring, $rounds, $offset, $check, $pcheck) = ("", "N" x $diff, 0, 0, "", "");
-  #  print "seeking $pattern for $peptide from $critseg...\n";
-  while ($check ne $peptide && $rounds <= $diff*2 + 1)
+  my ($codon, $codon_t, $memo) = @_;
+  return if ( ! $codon  ||  length($codon) != 3);
+  my (@answer, %temphash) = ((), ());
+  if (exists $memo->{$codon})
   {
-    $newpatt = $rounds <= $diff
-      ?  substr($nstring, 0, $rounds) . $pattern
-      :  substr($nstring, 0, ($rounds-3)) . complement($pattern, 1);
-    $newpatt .=  "N" while (length($newpatt) != length($critseg));
-    #  print "\t$newpatt\n";
-    my ($noff, $poff) = (0, 0);
-    $check = "";
-    while ($poff < length($peptide))
-    {
-      my @possibles = degcodon_to_aas( substr($newpatt, $noff, 3), $CODON_TABLE, $xlationref );
-      #   print "\t\t@possibles\n";
-      $check .= $_ foreach( grep { substr($peptide, $poff, 1) eq $_ } @possibles);
-      $noff += 3;
-      $poff ++;
-    }
-    $pcheck = translate(substr($critseg, $offset, length($peptide) * 3), 1, $CODON_TABLE);
-    #      print "\t\t$check, $pcheck, $offset\n";
-    $rounds++;
-    $offset += 3 if ($rounds % 3 == 0);
-#    $check = "" if ( $pcheck !~ $check);
+    return @{$memo->{$codon}};
   }
-  $newpatt = "0" if ($check ne $peptide);
-  # print "\t\tpataln $check, $pcheck, $rounds, $newpatt\n" if ($check ne $peptide);
-  return $swit == 1  ?  ($newpatt, $rounds-1)  :  $newpatt;
-}
-
-=head2 change_codons()
-
-  takes a nucleotide sequence and a few codon tables and tries to recode the
-  nucleotide sequence to one of four algorithms, 0 random, 1 most optimal,
-  2 next most optimal, 3 most different, 4 least different.
-  in: nucleotide sequence (string),
-      codon table (hash reference),
-      reverse codon table (hash reference),
-      RSCU value table (hash reference),
-      algorithm number
-      tag: try not to change the first two bases of the first codon in.
-  out: nucleotide sequence (string)
-  
-=cut
-
-sub change_codons
-{
-  # has tests in t/02-codons.t
-  my ($oldseq, $CODON_TABLE, $RSCU_VALUES, $swit, $tag) = @_;
-  my $REV_CODON_TABLE = define_reverse_codon_table($CODON_TABLE);
-  my ($offset, $newcod, $curcod, $newseq, $aa) = (0, undef, undef, undef, undef);
-  $tag = 0 if (! $tag);
-  while ($offset < length($oldseq))
+  elsif ($codon eq "NNN")
   {
-    $curcod = substr($oldseq, $offset, 3);
-    $newcod = $curcod;
-    $aa = $CODON_TABLE->{$curcod};
-    my @posarr = sort { $RSCU_VALUES->{$b} <=> $RSCU_VALUES->{$a} }
-           grep { exists($RSCU_VALUES->{$_}) }
-           @{$REV_CODON_TABLE->{$aa}};
-    if (scalar(@posarr) != 1 && $aa ne '*')
-    {
-      if    ($swit == 0)  #Random
-      {
-        $newcod = first { $_ ne $curcod } shuffle @posarr;
-      }
-      elsif ($swit == 1)  #Optimal
-      {
-        $newcod = first {    1    } @posarr;
-      }
-      elsif ($swit == 2)  #Less Optimal
-      {
-        $newcod = first { $_ ne $curcod } @posarr;
-      }
-      elsif ($swit == 3)  #Most Different
-      {
-        my $lastbase = substr $curcod, 2, 1;
-        my $frstbase = substr $curcod, 0, 1;
-        if ($tag && $offset == 0)
-        {
-          $newcod = first {  substr($_, 0, 2) eq substr($curcod, 0, 2)
-                  &&  substr($_, 2, 1) =~ sitver($lastbase, 1)}
-                @posarr;
-          if (!$newcod)
-          {
-            $newcod = first {  substr($_, 0, 2) eq substr($curcod, 0, 2)
-                    &&  substr($_, 2, 1) ne $lastbase}
-                  @posarr;
-          }
-          if (!$newcod)
-          {
-            die ("can't find a better cod for $curcod $aa<br>");
-          }
-        }
-        elsif  (scalar(@posarr) == 2)
-        {
-          $newcod = first { $_ ne $curcod } @posarr;
-        }
-        elsif  (scalar(@posarr) <= 4)
-        {
-          $newcod = first { (substr $_, 2, 1) =~ sitver($lastbase, 1) } @posarr;
-          if (!$newcod)
-          {
-            $newcod = first { (substr $_, 2) ne $lastbase } @posarr;
-          }
-        }
-        elsif  (scalar(@posarr) > 4)
-        {
-          $newcod = first {  ((substr $_, 2) !~ sitver($lastbase, 0) )
-                  && ((substr $_, 0, 1) ne $frstbase)}
-                @posarr;
-          if (!$newcod)
-          {
-            $newcod = first {  ((substr $_, 2) ne $lastbase )
-                    && ((substr $_, 0, 1) ne $frstbase)}
-                  @posarr;
-          }
-        }
-      #  print "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;$tag, $curcod, $newcod !<br><Br>";
-      }
-      elsif ($swit == 4)  #Least Different
-      {
-        my @sorarr = sort {abs($RSCU_VALUES->{$a} - $RSCU_VALUES->{$curcod}) <=> abs($RSCU_VALUES->{$b} - $RSCU_VALUES->{$curcod})} @posarr;
-        $newcod = first { $_ ne $curcod } @sorarr;
-        $newcod = $curcod if (abs($RSCU_VALUES->{$newcod} - $RSCU_VALUES->{$curcod}) > 1);
-      }
-    }
-    $newseq .= $newcod;
-    $offset += 3;
+    %temphash = map { $_ => 1} values %$codon_t;
+    @answer = keys %temphash;
   }
-  return $newseq;
-}
-
-=head2 sitver
-
-  takes a base as a string and returns by request either a set of transitions
-  or a set of transversions, used by change_codons()
-  
-=cut
-
-sub sitver
-{
-  my ($base, $swit) = @_;
-  $swit = 0 if (!$swit);
-  if ($swit == 1) #return set of transversions
+  else
   {
-    return $base =~ $NTIDES{Y}  ?  $NTIDES{R}  :  $NTIDES{Y};
+    my $reg = _regres($codon, 1);
+    %temphash = map {$codon_t->{$_}  => 1} grep { $_ =~ $reg } keys %$codon_t;
+    @answer = keys %temphash;
   }
-  else      #return set of transitions
+  $memo->{$codon} = \@answer;
+  return @answer;
+}
+
+=head2 _find_in_frame
+
+=cut
+
+sub _find_in_frame
+{
+  my ($ntseq, $pattern, $codon_t) = @_;
+  my $regex = _regres($pattern, 2);
+  my $aaseq = _translate($ntseq, 1, $codon_t);
+  my $hshref = _positions($aaseq, [$regex]);
+  my $pattntlen = length($pattern) * 3;
+  my $answer = {};
+  foreach my $ao (keys %$hshref)
   {
-    return $base =~ $NTIDES{Y}  ?  $NTIDES{Y}  :  $NTIDES{R};
-  }
-}
-
-=head2 RSCU_filter()
-
-  Deletes anything from the RSCU_TABLE that doesn't meet minimum RSCU.
-  in: rscu table (hash reference),
-      minimum RSCU value (integer)
-  out: rscu table (hash reference)
-  #NO UNIT TEST
-  
-=cut
-
-sub RSCU_filter
-{
-  my ($RSCU_TABLE, $min_value) = @_;
-  my @bad_codons = grep { $RSCU_TABLE->{$_}  < $min_value }
-           keys %$RSCU_TABLE;
-  delete @$RSCU_TABLE{@bad_codons};
-  return $RSCU_TABLE;
-}
-
-=head2 define_codon_percentages()
-
-  Generates a hash.  KEYS: codons (string)
-  VALUES: RSCU value over codon family size (float)
-  in: codon table (hash reference),
-      RSCU value table (hash reference)
-  out: codon percentage table (hash)
-  
-=cut
-
-sub define_codon_percentages
-{
-  # has a test in t/02-codons.t
-  my ($CODON_TABLE, $RSCU_VALUES) = @_;
-  my %AA_cod_count;
-  $AA_cod_count{$CODON_TABLE->{$_}}++  foreach keys %$CODON_TABLE;
-  my %CODON_PERC_TABLE =
-    map { $_ => $RSCU_VALUES->{$_} / $AA_cod_count{$CODON_TABLE->{$_}} }
-    keys %$CODON_TABLE;
-  return \%CODON_PERC_TABLE;
-}
-
-=head2 index_codon_percentages()
-
-  Generates two arrays for x and y values of a graph of codon percentage values.
-  in: dna sequence (string),
-      window size (integer),
-      codon percentage table (hash reference)
-  out: x values (array reference), y values (array reference)
-  #NO UNIT TEST
-  
-=cut
-
-sub index_codon_percentages
-{
-  my ($ntseq, $window, $cpthashref) = @_;
-  my @xvalues; my @yvalues;
-  my %CODON_PERCENTAGE_TABLE = %$cpthashref;
-  my $index; my $sum;
-  for (my $x = int($window * (3 / 2)) - 3;
-          $x < (length($ntseq) - 3 * (int($window * (3 / 2)) - 3));
-          $x += 3)
-  {
-    $sum = 0;
-    for(my $y = $x; $y < 3*$window + $x; $y += 3)
-    {
-      $sum += $CODON_PERCENTAGE_TABLE{substr($ntseq, $y, 3)};
-  #    $sum += $RSCU_TABLE{substr($nucseq, $y, 3)};
-    }
-    $sum = $sum / $window;
-    $index = ($x / 3) + 1;
-    push @xvalues, $index;
-    push @yvalues, $sum;
-  }
-  return (\@xvalues, \@yvalues);
-}
-
-=head2 codon_count()
-
-  takes a reference to an array of sequences and returns a hash with codons as
-  keys and the number of times the codon occurs as a value.
-  in: gene sequences (array reference)
-  out: codon count (hash reference)
-  
-=cut
-
-sub codon_count
-{
-  # has a test in t/02-codons.t
-  my ($seq, $CODON_TABLE, $hashref) = @_;
-  my %blank = map {$_ => 0} keys %$CODON_TABLE;
-  my $codoncount = $hashref ? $hashref : \%blank;
-  my $offset = 0;
-  while ( $offset <= length($seq) - 3 )
-  {
-    my $codon = substr($seq, $offset, 3);
-    if ($codon =~ $strcodon)
-    {
-      $codoncount->{$codon} ++;
-    }
-    else
-    {
-      $codoncount->{"XXX"} ++;
-    }
-    $offset += 3;
-  }
-  return $codoncount;
-}
-
-=head2 generate_RSCU_values()
-
-  takes a hash reference with keys as codons and values as number of times
-  those codons occur (it helps to use codon_count) and returns a hash with each
-  codon and its RSCU value
-  in: codon count (hash reference),
-      reverse codon table (hash reference)
-  out: RSCU values (hash reference)
-  
-=cut
-
-sub generate_RSCU_values
-{
-  # has a test in t/02-codons.t
-  my ($codon_count, $CODON_TABLE) = @_;
-  my $REV_CODON_TABLE = define_reverse_codon_table($CODON_TABLE);
-  my $RSCU_hash = {};
-  foreach my $codon (sort grep {$_ ne "XXX"} keys %$codon_count)
-  {
-    my $x_j = 0;
-    my $x = $codon_count->{$codon};
-    my $family = $REV_CODON_TABLE->{$CODON_TABLE->{$codon}};
-    my $family_size = scalar(@$family);
-    $x_j += $codon_count->{$_} foreach (grep {exists $codon_count->{$_}} @$family);
-    my $rscu = $x / ($x_j / $family_size) || 0.00;
-    $RSCU_hash->{$codon} = sprintf("%.2f",  $rscu ) ;
-  }
-  return $RSCU_hash;
-}
-
-=head2 define_aa_defaults()
-
-  Generates a hash.  KEYS: one letter amino acid code (string)
-  VALUES: most highly expressed codon for that amino acid (string)
-  in: reverse codon table (hash reference),
-      RSCU value table (hash reference)
-  out: amino acid default table (hash)
-  
-=cut
-
-sub define_aa_defaults
-{
-  # has test in t/02-codons.t
-  my ($CODON_TABLE, $RSCU_VALUES) = @_;
-  my $REV_CODON_TABLE = define_reverse_codon_table($CODON_TABLE);
-  my %aa_defaults = ();
-  foreach my $aa (keys %AACIDS)
-  {
-    my $myrscu = -1;
-    foreach my $codon (@{$REV_CODON_TABLE->{$aa}})
-    {
-      if ($RSCU_VALUES->{$codon} > $myrscu)
-      {
-        $aa_defaults{$aa} = $codon;
-        $myrscu = $RSCU_VALUES->{$codon};
-      }
-    }
-  }
-  return \%aa_defaults;
-}
-
-=head2 orf_finder()
-
-=cut
-
-sub orf_finder
-{
-  my ($strand, $CODON_TABLE) = @_;
-  my $answer = [];
-  for my $frame (qw(1 2 3 -1 -2 -3))
-  {
-    my $strandaa = translate($strand, $frame, $CODON_TABLE);
-    my $leng = length($strandaa);
-    my $curpos = 0;
-    my $orflength = 0;
-    my $onnaorf = 0;
-    my $orfstart = 0;
-    while ($curpos <= $leng)
-    {
-      my $aa = substr($strandaa, $curpos, 1);
-      if ($aa eq 'M' && $onnaorf eq '0')
-      {
-        $onnaorf = 1;
-        $orfstart = $curpos;
-      }
-      if ($aa eq '*' || ($curpos == $leng && $onnaorf == 1))
-      {
-        $onnaorf= 0;
-        push @$answer, [$frame, $orfstart, $orflength] if ($orflength >= .1*($leng));
-        $orflength = 0;
-      }
-      $curpos++;
-      $orflength++ if ($onnaorf == 1);
-    }
+    my $nuco = 3 * $ao;
+    $answer->{$nuco} = substr($ntseq, $nuco, $pattntlen);
   }
   return $answer;
 }
 
-=head2 minimize_local_alignment_dp()
+=head2 _minimize_local_alignment_dp()
 
-  Repeatsmasher, by Dongwon Lee. A function that minimizes local alignment
-  scores.
+Repeatsmasher, by Dongwon Lee. A function that minimizes local alignment
+scores.
+
   in: gene sequence (string)
       codon table (hashref)
       RSCU table (hashref)
@@ -985,9 +506,9 @@ sub orf_finder
   
 =cut
 
-sub minimize_local_alignment_dp
+sub _minimize_local_alignment_dp
 {
-  my ($oldseq, $CODON_TABLE, $RSCU_VALUES) = @_;
+  my ($oldseq, $codon_t, $rev_codon_t, $rscu_t) = @_;
   my $match = 5;
   my $transi = -3;
   my $transv = -4;
@@ -998,23 +519,22 @@ sub minimize_local_alignment_dp
             [$transv, $transi, $transv, $match] );
   my %nt2idx = ("A"=>0, "C"=>1, "G"=>2, "T"=>3);
 
-  my $REV_CODON_TABLE = define_reverse_codon_table($CODON_TABLE);
-
   #initial values
   my @optM = (0);
-  my $optseq = "";
+  my $optseq = q{};
 
   #assumming that the sequence is in frame
-  my ($offset, $cod, $aa) = (0, "", "");
-  while ( $offset <= length($oldseq)-3 )
+  my ($offset, $cod, $aa) = (0, q{}, q{});
+  my $oldlen = length($oldseq) - 3;
+  while ( $offset <= $oldlen )
   {
     $cod = substr($oldseq, $offset, 3);
-    $aa  = translate($cod, 1, $CODON_TABLE);
-    my @posarr = sort { $RSCU_VALUES->{$b} <=> $RSCU_VALUES->{$a} }
-                  @{$REV_CODON_TABLE->{$aa}};
+    $aa  = _translate($cod, 1, $codon_t);
+    my @posarr = sort { $rscu_t->{$b} <=> $rscu_t->{$a} }
+                  @{$rev_codon_t->{$aa}};
 
     my @minM = ();
-    my $min_seq = "";
+    my $min_seq = q{};
     #assign an impossible large score
     my $min_score = $match*(length($oldseq)**2);
 
@@ -1028,10 +548,11 @@ sub minimize_local_alignment_dp
         foreach my $nt (split(//, $newcod))
         {
           my $currseq = $prevseq . $nt;
+          my $currlen = length($currseq);
           my @currM = ();
           my $pos = 0;
           push @currM, 0;
-          while($pos < length($currseq))
+          while($pos < $currlen)
           {
             my $nt2 = substr($currseq, $pos, 1);
             my $nidx1 = $nt2idx{$nt};
@@ -1070,35 +591,159 @@ sub minimize_local_alignment_dp
   return $optseq;
 }
 
+=head2 _pattern_aligner
+
+takes a nucleotide sequence, a pattern, a peptide sequence, and a codon table
+and inserts Ns before the pattern until they align properly. This is so a
+pattern can be inserted out of frame.
+
+  in: nucleotide sequence (string),
+      nucleotide pattern (string),
+      amino acid sequence (string),
+      codon table (hash reference)
+  out: nucleotide pattern (string)
+  
+=cut
+
+sub _pattern_aligner
+{
+  my ($critseg, $pattern, $peptide, $codon_t, $memo) = @_;
+  my $diff = length($critseg) - length($pattern);
+  my ($newpatt, $nstring, $rounds, $offset, $check, $pcheck) = (q{}, "N" x $diff, 0, 0, q{}, q{});
+  #  print "seeking $pattern for $peptide from $critseg...\n";
+  while ($check ne $peptide && $rounds <= $diff*2 + 1)
+  {
+    $newpatt = $rounds <= $diff
+      ?  substr($nstring, 0, $rounds) . $pattern
+      :  substr($nstring, 0, ($rounds-3)) . _complement($pattern, 1);
+    $newpatt .=  "N" while (length($newpatt) != length($critseg));
+    #  print "\t$newpatt\n";
+    my ($noff, $poff) = (0, 0);
+    $check = q{};
+    while ($poff < length($peptide))
+    {
+      my @possibles = _degcodon_to_aas( substr($newpatt, $noff, 3), $codon_t, $memo );
+      #   print "\t\t@possibles\n";
+      $check .= $_ foreach( grep { substr($peptide, $poff, 1) eq $_ } @possibles);
+      $noff += 3;
+      $poff ++;
+    }
+    $pcheck = _translate(substr($critseg, $offset, length($peptide) * 3), 1, $codon_t);
+    #      print "\t\t$check, $pcheck, $offset\n";
+    $rounds++;
+    $offset += 3 if ($rounds % 3 == 0);
+#    $check = q{} if ( $pcheck !~ $check);
+  }
+  $newpatt = "0" if ($check ne $peptide);
+  # print "\t\tpataln $check, $pcheck, $rounds, $newpatt\n" if ($check ne $peptide);
+  return ($newpatt, $rounds - 1);
+}
+
+=head2 _pattern_adder()
+
+takes a nucleotide sequence, a nucleotide "pattern" to be interpolated, and
+the codon table, and returns an edited nucleotide sequence that contains the
+pattern (if possible).
+
+  in: nucleotide sequence (string),
+      nucleotide pattern (string),
+      codon table (hash reference)
+  out: nucleotide sequence (string) OR null
+  
+=cut
+
+sub _pattern_adder
+{
+  my ($oldpatt, $newpatt, $codon_t, $revcodon_t, $memo) = @_;
+  #assume that critseg and pattern come in as complete codons
+  # (i.e., have been run through pattern_aligner)
+  my $copy = q{};
+  for (my $offset = 0; $offset < length($oldpatt); $offset += 3)
+  {
+    my $curcod = substr($oldpatt, $offset, 3);
+    my $curtar = substr($newpatt, $offset, 3);
+    my $ctregx = _regres($curtar);
+    foreach my $g (_degcodon_to_aas($curcod, $codon_t, $memo))
+    {
+      if ($curcod =~ $ctregx)
+      {
+        $copy .= $curcod;
+      }
+      else
+      {
+        my @arr = @{$revcodon_t->{$g}};
+        foreach my $potcod (@arr)
+        {
+          my $flag = 0;
+          $flag++ if ($potcod =~ $ctregx || $curtar =~ _regres($potcod));
+          if ($flag != 0)
+          {
+            $copy .= $potcod;
+            last;
+          }
+        }
+      }
+      # print "\t\tpatadd\t($curcod, $curtar)\t$copy<br>\n";
+    }
+  }
+  # print "\t\tpatadd $copy from $oldpatt\n";
+  return length($copy) == length($oldpatt)  ?  $copy  :  0;
+}
+
+=head2 _codon_change_type
+
+=cut
+
+sub _codon_change_type
+{
+	my ($oldcod, $newcod, $codon_t) = @_;
+  my $oldaa = $codon_t->{$oldcod};
+  my $newaa = $codon_t->{$newcod};
+	my $type = $oldaa eq $newaa
+			          ?	$oldaa eq q{*}
+					        ?	'stop_retained_variant'
+					        :	'synonymous_codon'
+						    :	$oldaa eq q{*}
+					        ?	'stop_lost'
+							    :	$newaa eq q{*}
+							      ?	'stop_gained'
+							      :	'non_synonymous_codon';
+	return $type;
+}
+
 1;
 
 __END__
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (c) 2011, GeneDesign developers
+Copyright (c) 2013, GeneDesign developers
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
-    * Redistributions of source code must retain the above copyright
-      notice, this list of conditions and the following disclaimer.
-    * Redistributions in binary form must reproduce the above copyright
-      notice, this list of conditions and the following disclaimer in the
-      documentation and/or other materials provided with the distribution.
-    * Neither the name of the Johns Hopkins nor the
-      names of the developers may be used to endorse or promote products
-      derived from this software without specific prior written permission.
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
+
+* Redistributions of source code must retain the above copyright notice, this
+list of conditions and the following disclaimer.
+
+* Redistributions in binary form must reproduce the above copyright notice, this
+list of conditions and the following disclaimer in the documentation and/or
+other materials provided with the distribution.
+
+* The names of Johns Hopkins, the Joint Genome Institute, the Lawrence Berkeley
+National Laboratory, the Department of Energy, and the GeneDesign developers may
+not be used to endorse or promote products derived from this software without
+specific prior written permission.
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
 ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
 WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE DEVELOPERS BE LIABLE FOR ANY
-DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+DISCLAIMED. IN NO EVENT SHALL THE DEVELOPERS BE LIABLE FOR ANY DIRECT, INDIRECT,
+INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 =cut

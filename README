@@ -1,32 +1,43 @@
 Bio::GeneDesign
 
-The README is used to introduce the module and provide instructions on
-how to install the module, any machine dependencies it may have (for
-example C compilers and installed libraries) and any other information
-that should be provided before the module is installed.
+ABOUT
 
-A README file is required for CPAN modules since CPAN extracts the README
-file from a module distribution so that people browsing the archive
-can use it to get an idea of the module's uses. It is usually a good idea
-to provide version information here so that people can decide whether
-fixes for the module are worth downloading.
-
+It's about synthetic biology - specifically, designing constructs up to 10kb in
+size.
 
 INSTALLATION
 
 To install this module, run the following commands:
 
 	perl Build.PL
+	
+Answer the following questions (may differ based on your system, [defaults]):
+
+			Where should GeneDesign write tmp files? [ /tmp ]
+			Where should GeneDesign config files be installed? [ /etc/GeneDesign/ ]
+			Should GeneDesign install scripts? [ Y ]
+			Where should GeneDesign scripts be installed? [ /usr/local/bin/ ]
+			Enable GD::Graphics support? [ Y ]
+
+You may need to install some additional perl modules for it to work:
+
+	./Build installdeps
+	
+Then run the following:
+
 	./Build
 	./Build test
 	./Build install
+
+Then enjoy GeneDesign.
+
 
 SUPPORT AND DOCUMENTATION
 
 After installing, you can find documentation for this module with the
 perldoc command.
 
-    perldoc Bio::GeneDesign::Basic
+    perldoc Bio::GeneDesign
 
 You can also look for information at:
 
@@ -42,39 +53,33 @@ You can also look for information at:
     Search CPAN
         http://search.cpan.org/dist/Bio::GeneDesign/
 
+COPYRIGHT AND LICENSE
 
-LICENSE AND COPYRIGHT
+Copyright (c) 2013, GeneDesign developers
+All rights reserved.
 
-Copyright (C) 2011 Sarah Richardson
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
 
-This program is distributed under the (Revised) BSD License:
-L<http://www.opensource.org/licenses/bsd-license.php>
+* Redistributions of source code must retain the above copyright notice, this
+list of conditions and the following disclaimer.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions
-are met:
+* Redistributions in binary form must reproduce the above copyright notice, this
+list of conditions and the following disclaimer in the documentation and/or
+other materials provided with the distribution.
 
-* Redistributions of source code must retain the above copyright
-notice, this list of conditions and the following disclaimer.
+* The names of Johns Hopkins, the Joint Genome Institute, the Lawrence Berkeley
+National Laboratory, the Department of Energy, and the GeneDesign developers may
+not be used to endorse or promote products derived from this software without
+specific prior written permission.
 
-* Redistributions in binary form must reproduce the above copyright
-notice, this list of conditions and the following disclaimer in the
-documentation and/or other materials provided with the distribution.
-
-* Neither the name of Sarah Richardson's Organization
-nor the names of its contributors may be used to endorse or promote
-products derived from this software without specific prior written
-permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE DEVELOPERS BE LIABLE FOR ANY DIRECT, INDIRECT,
+INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
