@@ -4,7 +4,7 @@ Bio::GeneDesign::ReverseTranslate
 
 =head1 VERSION
 
-Version 5.51
+Version 5.52
 
 =head1 DESCRIPTION
 
@@ -25,7 +25,7 @@ use Carp;
 use strict;
 use warnings;
 
-our $VERSION = 5.51;
+our $VERSION = 5.52;
 
 use base qw(Exporter);
 our @EXPORT_OK = qw(

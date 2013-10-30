@@ -8,7 +8,7 @@ GeneDesign::PrefixTree - A suffix tree implementation for nucleotide searching
 
 =head1 VERSION
 
-Version 5.51
+Version 5.52
 
 =head1 DESCRIPTION
 
@@ -27,7 +27,7 @@ use 5.006;
 use strict;
 use warnings;
 
-my $VERSION = 5.51;
+my $VERSION = 5.52;
 
 =head1 Functions
 

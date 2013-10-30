@@ -7,7 +7,7 @@ use Pod::Usage;
 use strict;
 use warnings;
 
-my $VERSION = '5.51';
+my $VERSION = '5.52';
 my $GDV = "GD_Graph_RSCU_Values_$VERSION";
 my $GDS = "_GRV";
 
@@ -115,7 +115,7 @@ __END__
   
 =head1 VERSION
 
-  Version 5.51
+  Version 5.52
   
 =head1 DESCRIPTION
 

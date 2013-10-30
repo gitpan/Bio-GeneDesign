@@ -14,6 +14,7 @@ $GD->set_organism(-organism_name => "yeast",
                   -table_path => "codon_tables/Standard.ct",
                   -rscu_path => "codon_tables/yeast.rscu");
 
+$GD->{conf} = 'blib/GeneDesign/';
 # TESTING subtract_sequence sequence
 if (1)
 {

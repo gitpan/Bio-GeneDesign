@@ -13,6 +13,7 @@ $GD->set_organism(-organism_name => "yeast",
                   -table_path => "codon_tables/Standard.ct",
                   -rscu_path => "codon_tables/yeast.rscu");
 
+$GD->{conf} = 'blib/GeneDesign/';
 $GD->set_restriction_enzymes(-list_path => "enzymes/test");
 
 my %elist = (RsaI => 1, TaqI => 1, BsrI => 1, AciI => 1);
