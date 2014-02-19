@@ -8,7 +8,7 @@ use Pod::Usage;
 use strict;
 use warnings;
 
-my $VERSION = '5.52';
+my $VERSION = '5.53';
 my $GDV = "GD_Juggle_Codons_$VERSION";
 my $GDS = "_CJ";
 
@@ -113,9 +113,12 @@ while ( my $obj = $iterator->next_seq() )
 if (scalar @seqstowrite)
 {
   my $outputfilename = $filename . $GDS . "." . $p{FORMAT};
-  $GD->export_seqs( -filename => $outputfilename,
-                    -sequences => \@seqstowrite,
-                    -format => $p{FORMAT});
+  $GD->export_seqs(
+    -filename  => $outputfilename,
+    -sequences => \@seqstowrite,
+    -path      => $p{OUTPUT},
+    -format    => $p{FORMAT}
+  );
   push @fileswritten, $outputfilename;
 }
 
@@ -134,7 +137,7 @@ __END__
 
 =head1 VERSION
 
-  Version 5.52
+  Version 5.53
 
 =head1 DESCRIPTION
 
@@ -200,7 +203,7 @@ Optional arguments:
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (c) 2013, GeneDesign developers
+Copyright (c) 2014, GeneDesign developers
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,

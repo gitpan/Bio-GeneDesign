@@ -8,7 +8,7 @@ use File::Basename;
 use strict;
 use warnings;
 
-my $VERSION = '5.52';
+my $VERSION = '5.53';
 my $GDV = "GD_Sequence_Subtraction_$VERSION";
 my $GDS = "_SS";
 
@@ -21,7 +21,6 @@ GetOptions (
       'enzymes=s'     => \$p{ENZYMES},
       'removes=s'     => \$p{SEQUENCES},
       'revcom'        => \$p{REVCOMP},
-      'iterations=i'  => \$p{ITER},
       'organism=s'    => \$p{ORGS},
       'rscu=s'        => \$p{FILES},
       'output=s'      => \$p{OUTPUT},
@@ -60,7 +59,7 @@ unless ($p{ORGS} || $p{FILES})
 {
   warn "\n GDWARNING: no usable RSCU input was provided; codon replacements"
     . " will be subjective.\n";
-  $p{ORGS} = "Flat";
+  $p{ORGS} = "Unbiased";
 }
 
 #We must get a list of recognizeable enzymes or a set of forbidden sequences.
@@ -73,6 +72,8 @@ die "\n GDERROR: Neither a list of enzymes nor a file of sequences to be "
 ################################################################################
 my @fileswritten;
 my @seqstowrite;
+
+$GD->set_restriction_enzymes();
 
 #Set up removal information
 my @TAROBJS = ();
@@ -89,8 +90,6 @@ if ($p{SEQUENCES})
 }
 if ($p{ENZYMES})
 {
-  my $enz_set = "standard_and_IIB";
-  $GD->set_restriction_enzymes(-enzyme_set => $enz_set);
   foreach my $enz (split (",", $p{ENZYMES}))
   {
     if (exists $GD->enzyme_set->{$enz})
@@ -99,12 +98,12 @@ if ($p{ENZYMES})
     }
     else
     {
-      print "\n GDWARNING: Skipping $enz : not in enzyme set $enz_set\n";
+      print "\n GDWARNING: Skipping $enz : not in enzyme set\n";
     }
   }
 }
 
-die "\n GDERROR: no removal input was provided.\n" 
+die "\n GDERROR: no removal input was provided.\n"
   unless (scalar(@TAROBJS));
 
 my %works = ();
@@ -161,7 +160,7 @@ while ( my $obj = $iterator->next_seq() )
       my $s = $precount > 1 ? "s" : q{};
       if ($oops)
       {
-        warn "\tGDWARNING: Failed to remove $oops of $precount instances of $id" 
+        warn "\tGDWARNING: Failed to remove $oops of $precount instances of $id"
             . " from " . $obj->id . "\n";
         $obj->desc($obj->desc . "[~$id]");
       }
@@ -220,7 +219,7 @@ __END__
 
 =head1 VERSION
 
-  Version 5.52
+  Version 5.53
 
 =head1 DESCRIPTION
 
@@ -269,7 +268,7 @@ Optional arguments:
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (c) 2013, GeneDesign developers
+Copyright (c) 2014, GeneDesign developers
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,

@@ -8,7 +8,7 @@ Bio::GeneDesign
 
 =head1 VERSION
 
-Version 5.52
+Version 5.53
 
 =head1 DESCRIPTION
 
@@ -37,7 +37,7 @@ use Carp;
 use strict;
 use warnings;
 
-my $VERSION = 5.52;
+my $VERSION = 5.53;
   
 =head1 CONSTRUCTORS
 
@@ -107,6 +107,18 @@ sub new
 =head1 ACCESSORS
 
 =cut
+
+=head2 codon_path
+
+returns the directory containing codon tables
+
+=cut
+
+sub codon_path
+{
+  my ($self) = @_;
+  return $self->{codon_path};
+}
 
 =head2 EMBOSS
 
@@ -667,6 +679,20 @@ sub positions
   return _positions($base, $regarr);
 }
 
+=head2 parse_organisms
+
+Returns two hash references. The first contains the names of all rscu tables.
+The second contains the name of all codon tables.
+
+=cut
+
+sub parse_organisms
+{
+  my ($self) = @_;
+  my ($rscu, $cods) = _parse_organisms($self->{codon_path});
+  return ($rscu, $cods);
+}
+
 =head2 set_codontable
 
     # load a codon table from the GeneDesign configuration directory
@@ -683,12 +709,10 @@ the accessor L<codontable|/codontable> will return the hash reference that
 represents the codon table.
 
 If no path is provided, the configuration directory /codon_tables is checked for
-tables that match the provided organism name. If there is no table in that
-directory, a warning will appear and the standard codon table will be
-used.
+tables that match the provided organism name. Any codon table that is using a
+non standard definition for a codon will cause a warning to be issued.
 
-Any codon table that is missing a definition for a codon will cause a warning to
-be issued. The table format for codon tables is
+The table format for codon tables is
 
     # Standard genetic code
     {TTT} = F
@@ -714,12 +738,15 @@ sub set_codontable
   $self->throw("$table_path does not exist")
     if ($table_path && ! -e $table_path);
     
-  if (! $table_path)
+  if (! $table_path )
   {
     $table_path = $self->{codon_path} . $orgname . ".ct";
-    if (! -e $table_path)
+    if (-e $table_path && $orgname ne 'Standard')
     {
-      warn "No Codon table for $orgname found. Using Standard values\n";
+      warn "Using nonstandard codon definitions for $orgname\n";
+    }
+    else
+    {
       $table_path = $self->{codon_path} . "Standard.ct";
     }
   }
@@ -781,8 +808,8 @@ sub set_rscutable
     $rscu_path = $self->{codon_path} . $orgname . ".rscu";
     if (! -e $rscu_path)
     {
-      warn "No RSCU table for $orgname found. Using Flat values\n";
-      $rscu_path = $self->{codon_path} . "Flat.rscu";
+      warn "No RSCU table for $orgname found. Using Unbiased values\n";
+      $rscu_path = $self->{codon_path} . "Unbiased.rscu";
     }
   }
 
@@ -1504,6 +1531,15 @@ sub translate
   }
 }
 
+=head2 reverse_translate_algorithms
+
+=cut
+
+sub reverse_translate_algorithms
+{
+  return Bio::GeneDesign::ReverseTranslate::_list_algorithms();
+}
+
 =head2 reverse_translate
 
 =cut
@@ -1557,6 +1593,15 @@ sub reverse_translate
   {
     return $seq;
   }
+}
+
+=head2 codon_juggle_algorithms
+
+=cut
+
+sub codon_juggle_algorithms
+{
+  return Bio::GeneDesign::CodonJuggle::_list_algorithms();
 }
 
 =head2 codon_juggle
@@ -2130,6 +2175,18 @@ sub import_seqs
   return ($iterator, $filename, $suffix);
 }
 
+=head2 export_formats
+
+Export formats that have been tried and tested to work well.
+
+=cut
+
+sub export_formats
+{
+  my @list = qw(genbank fasta);
+  return \@list;
+}
+
 =head2 export_seqs
 
 NO TEST
@@ -2372,7 +2429,7 @@ __END__
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (c) 2013, GeneDesign developers
+Copyright (c) 2014, GeneDesign developers
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,

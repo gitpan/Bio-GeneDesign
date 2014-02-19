@@ -1,5 +1,8 @@
 Revision history for Bio::GeneDesign
 
+5.52 14.02.18
+	Updated RSCU table names, added compatibility sugar for upcoming GUI release
+
 5.52 13.10.30
 	Fixed a problem where tests fail on systems that have never had GeneDesign installed
 

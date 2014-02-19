@@ -8,7 +8,7 @@ Bio::GeneDesign::Graph
 
 =head1 VERSION
 
-Version 5.52
+Version 5.53
 
 =head1 DESCRIPTION
 
@@ -30,7 +30,7 @@ use GD::Image;
 use strict;
 use warnings;
 
-our $VERSION = 5.52;
+our $VERSION = 5.53;
 
 use base qw(Exporter);
 our @EXPORT_OK = qw(
@@ -179,7 +179,7 @@ __END__
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (c) 2013, GeneDesign developers
+Copyright (c) 2014, GeneDesign developers
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,

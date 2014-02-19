@@ -8,7 +8,7 @@ Bio::GeneDesign::Exceptions
 
 =head1 VERSION
 
-Version 5.52
+Version 5.53
 
 =head1 DESCRIPTION
 

@@ -23,7 +23,7 @@ if ($check)
   $dcpath = Bio::GeneDesign::ConfigData->config('conf_path')        || $dcpath;
   $dtpath = Bio::GeneDesign::ConfigData->config('tmp_path')         || $dtpath;
   $dspath = Bio::GeneDesign::ConfigData->config('script_path')      || $dspath;
-  $dg =     Bio::GeneDesign::ConfigData->config('graphing_support') || $dg;
+  $dg =     Bio::GeneDesign::ConfigData->config('graphing_support') == 1 ? 'y' : 'n';
 }
 
 my $GDB = Module::Build->new
@@ -31,7 +31,7 @@ my $GDB = Module::Build->new
     module_name         => 'Bio::GeneDesign',
     license             => 'bsd',
     dist_author         => q{Sarah Richardson <SMRichardson@lbl.gov>},
-    dist_version        => '5.52',
+    dist_version        => '5.53',
     dist_abstract       => 'Functions for the design of synthetic genes',
     add_to_cleanup      => [ 'Bio::GeneDesign-*' ],
     create_makefile_pl  => 'traditional',
@@ -72,6 +72,7 @@ my $GDB = Module::Build->new
       'bin/GD_Generate_RSCU_Table.pl',
       'bin/GD_Graph_Dotplot.pl',
       'bin/GD_Juggle_Codons.pl',
+      'bin/GD_List_Codon_Tables.pl',
       'bin/GD_Reverse_Translate.pl',
       'bin/GD_Sequence_Subtraction.pl',
       'bin/GD_Graph_RSCU_Values.pl'
@@ -143,21 +144,20 @@ my $tcp = $GDB->config_data('conf_path');
 $GDB->config_data(conf_path => $tcp);
 my $confs =
 [
-  'codon_tables/arabidopsis_thaliana.rscu',
+  'codon_tables/Arabidopsis_thaliana.rscu',
   'codon_tables/Bacillus_subtilis.rscu',
   'codon_tables/Caenorhabditis_elegans.rscu',
-  'codon_tables/Cglut.rscu',
+  'codon_tables/Corynebacterium_glutamicum.rscu',
   'codon_tables/Deinococcus_radiodurans.rscu',
   'codon_tables/Drosophila_melanogaster.rscu',
   'codon_tables/Escherichia_coli.rscu',
-  'codon_tables/Flat.rscu',
+  'codon_tables/Unbiased.rscu',
   'codon_tables/Homo_sapiens.rscu',
   'codon_tables/Mycoplasma_genitalium.ct',
   'codon_tables/Mycoplasma_genitalium.rscu',
-  'codon_tables/oryza_sativa.rscu',
+  'codon_tables/Oryza_sativa.rscu',
   'codon_tables/Saccharomyces_cerevisiae.rscu',
   'codon_tables/Standard.ct',
-  'codon_tables/yeast.rscu',
   'enzymes/all_enzymes',
   'enzymes/blunts',
   'enzymes/IIB',

@@ -11,7 +11,7 @@ use warnings;
 my $GD = Bio::GeneDesign->new();
 $GD->set_organism(-organism_name => "yeast",
                   -table_path => "codon_tables/Standard.ct",
-                  -rscu_path => "codon_tables/yeast.rscu");
+                  -rscu_path => "codon_tables/Saccharomyces_cerevisiae.rscu");
 
 my $orf = "ATGGACAGATCTTGGAAGCAGAAGCTGAACCGCGACACCGTGAAGCTGACCGAGGTGATGACCTGGA";
 $orf .= "GAAGACCCGCCGCTAAATGGTTTTATACTTTAATTAATGCTAATTATTTGCCACCATGCCCACCCGACC";

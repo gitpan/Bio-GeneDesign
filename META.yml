@@ -8,7 +8,7 @@ build_requires:
 configure_requires:
   Module::Build: 0.38
 dynamic_config: 1
-generated_by: 'Module::Build version 0.4007, CPAN::Meta::Converter version 2.120351'
+generated_by: 'Module::Build version 0.4205, CPAN::Meta::Converter version 2.120351'
 license: bsd
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -17,40 +17,40 @@ name: Bio-GeneDesign
 provides:
   Bio::GeneDesign:
     file: lib/Bio/GeneDesign.pm
-    version: 5.52
+    version: 5.53
   Bio::GeneDesign::Basic:
     file: lib/Bio/GeneDesign/Basic.pm
-    version: 5.52
+    version: 5.53
   Bio::GeneDesign::CodonJuggle:
     file: lib/Bio/GeneDesign/CodonJuggle.pm
-    version: 5.52
+    version: 5.53
   Bio::GeneDesign::Codons:
     file: lib/Bio/GeneDesign/Codons.pm
-    version: 5.52
+    version: 5.53
   Bio::GeneDesign::Exceptions:
     file: lib/Bio/GeneDesign/Exceptions.pm
     version: 0
   Bio::GeneDesign::Graph:
     file: lib/Bio/GeneDesign/Graph.pm
-    version: 5.52
+    version: 5.53
   Bio::GeneDesign::Oligo:
     file: lib/Bio/GeneDesign/Oligo.pm
-    version: 5.52
+    version: 5.53
   Bio::GeneDesign::PrefixTree:
     file: lib/Bio/GeneDesign/PrefixTree.pm
-    version: 5.52
+    version: 5.53
   Bio::GeneDesign::Random:
     file: lib/Bio/GeneDesign/Random.pm
-    version: 5.52
+    version: 5.53
   Bio::GeneDesign::RestrictionEnzyme:
     file: lib/Bio/GeneDesign/RestrictionEnzyme.pm
-    version: 5.52
+    version: 5.53
   Bio::GeneDesign::RestrictionEnzymes:
     file: lib/Bio/GeneDesign/RestrictionEnzymes.pm
-    version: 5.52
+    version: 5.53
   Bio::GeneDesign::ReverseTranslate:
     file: lib/Bio/GeneDesign/ReverseTranslate.pm
-    version: 5.52
+    version: 5.53
 requires:
   Bio::Root::Root: 0
   Exception::Class: 0
@@ -60,4 +60,4 @@ requires:
   perl: 5.006
 resources:
   license: http://opensource.org/licenses/bsd-license.php
-version: 5.52
+version: 5.53

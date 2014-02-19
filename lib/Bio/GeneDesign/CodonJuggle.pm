@@ -4,7 +4,7 @@ Bio::GeneDesign::CodonJuggle
 
 =head1 VERSION
 
-Version 5.52
+Version 5.53
 
 =head1 DESCRIPTION
 
@@ -26,10 +26,11 @@ use Carp;
 use strict;
 use warnings;
 
-our $VERSION = 5.52;
+our $VERSION = 5.53;
 
 use base qw(Exporter);
 our @EXPORT_OK = qw(
+  _list_algorithms
   _codonJuggle_balanced
   _codonJuggle_high
   _codonJuggle_least_different_rscu
@@ -37,7 +38,24 @@ our @EXPORT_OK = qw(
   _codonJuggle_random
 );
 our %EXPORT_TAGS =  (GD => \@EXPORT_OK);
-  
+
+=head2 _list_algorithms
+
+=cut
+
+sub _list_algorithms
+{
+  my %hsh =
+  (
+    balanced                => 'weighted averages',
+    high                    => 'uniformly most used',
+    least_different_RSCU    => 'least different by RSCU value',
+    most_different_sequence => 'most different by sequence identity',
+    random                  => 'random',
+  );
+  return \%hsh;
+}
+
 =head2 _codonJuggle_balanced
 
 =cut
@@ -219,7 +237,7 @@ __END__
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (c) 2013, GeneDesign developers
+Copyright (c) 2014, GeneDesign developers
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,

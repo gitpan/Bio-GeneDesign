@@ -8,7 +8,7 @@ Bio::GeneDesign::RestrictionEnzyme
 
 =head1 VERSION
 
-Version 5.52
+Version 5.53
 
 =head1 DESCRIPTION
 
@@ -30,7 +30,7 @@ use warnings;
 
 use base qw(Bio::Root::Root);
 
-our $VERSION = 5.52;
+our $VERSION = 5.53;
 
 my $IIPreg  = qr/   ([A-Z]*)   \^ ([A-Z]*)      /x;
 my $IIAreg  = qr/\A \w+ \(([\-]*\d+) \/ ([\-]*\d+)\)\Z  /x;
@@ -1316,7 +1316,7 @@ __END__
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (c) 2013, GeneDesign developers
+Copyright (c) 2014, GeneDesign developers
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,

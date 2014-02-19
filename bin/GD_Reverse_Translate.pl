@@ -8,7 +8,7 @@ use Pod::Usage;
 use strict;
 use warnings;
 
-my $VERSION = '5.52';
+my $VERSION = '5.53';
 my $GDV = "GD_Reverse_Translate_$VERSION";
 my $GDS = "_RT";
 
@@ -129,7 +129,7 @@ __END__
 
 =head1 VERSION
 
-  Version 5.52
+  Version 5.53
 
 =head1 DESCRIPTION
 
@@ -180,7 +180,7 @@ Optional arguments:
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (c) 2013, GeneDesign developers
+Copyright (c) 2014, GeneDesign developers
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,

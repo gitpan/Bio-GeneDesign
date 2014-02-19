@@ -4,7 +4,7 @@ Bio::GeneDesign::ReverseTranslate
 
 =head1 VERSION
 
-Version 5.52
+Version 5.53
 
 =head1 DESCRIPTION
 
@@ -25,15 +25,31 @@ use Carp;
 use strict;
 use warnings;
 
-our $VERSION = 5.52;
+our $VERSION = 5.53;
 
 use base qw(Exporter);
 our @EXPORT_OK = qw(
+  _list_algorithms
   _reversetranslate_balanced
   _reversetranslate_high
   _reversetranslate_random
 );
 our %EXPORT_TAGS =  (GD=> \@EXPORT_OK);
+
+=head2 _list_algorithms
+
+=cut
+
+sub _list_algorithms
+{
+  my %hsh =
+  (
+    balanced => 'weighted averages',
+    high     => 'uniformly most used',
+    random   => 'random',
+  );
+  return \%hsh;
+}
 
 =head2 _reversetranslate_balanced
 
@@ -125,7 +141,7 @@ __END__
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (c) 2013, GeneDesign developers
+Copyright (c) 2014, GeneDesign developers
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
